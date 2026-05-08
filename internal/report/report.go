@@ -19,6 +19,7 @@ func Generate(g *graph.Graph) string {
 	writePackages(&sb, g)
 	writeImportantFiles(&sb, g)
 	writeImportantSymbols(&sb, g)
+	writeDependencies(&sb, g)
 	writeEnvVars(&sb, g)
 	writeImports(&sb, g)
 	writeUsageInstructions(&sb)
@@ -150,6 +151,18 @@ func writeImportantSymbols(sb *strings.Builder, g *graph.Graph) {
 		}
 		fmt.Fprintf(sb, "| `%s` | %s | `%s` | %d | %d |\n",
 			name, sf.sym.Kind, sf.sym.File, sf.sym.Line, sf.calls)
+	}
+	sb.WriteString("\n")
+}
+
+func writeDependencies(sb *strings.Builder, g *graph.Graph) {
+	if len(g.Dependencies) == 0 {
+		return
+	}
+	sb.WriteString("## External Dependencies (Tech Stack)\n\n")
+	sb.WriteString("| Module | Version |\n|--------|---------|\n")
+	for _, dep := range g.Dependencies {
+		fmt.Fprintf(sb, "| `%s` | `%s` |\n", dep.Module, dep.Version)
 	}
 	sb.WriteString("\n")
 }

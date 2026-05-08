@@ -17,6 +17,13 @@ type Graph struct {
 	Imports     []ImportEdge  `json:"imports"`
 	Calls       []CallEdge    `json:"calls"`
 	EnvReads    []EnvRead     `json:"env_reads"`
+	Dependencies []Dependency `json:"dependencies,omitempty"`
+}
+
+// Dependency represents an external module dependency from go.mod.
+type Dependency struct {
+	Module  string `json:"module"`
+	Version string `json:"version"`
 }
 
 // PackageNode represents a Go package found in the repository.

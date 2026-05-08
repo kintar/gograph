@@ -74,6 +74,10 @@ func runBuild(args []string) int {
 		Root:        absRoot,
 	}
 
+	if deps, err := parseDependencies(absRoot); err == nil {
+		g.Dependencies = deps
+	}
+
 	fset := token.NewFileSet()
 	pkgMap := make(map[string]*graph.PackageNode)
 
@@ -279,6 +283,52 @@ func writeGitignore(root string) error {
 	}
 	_, err = fmt.Fprintf(f, "%s%s\n", prefix, entry)
 	return err
+}
+
+func parseDependencies(absRoot string) ([]graph.Dependency, error) {
+	modPath := filepath.Join(absRoot, "go.mod")
+	data, err := os.ReadFile(modPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var deps []graph.Dependency
+	lines := strings.Split(string(data), "\n")
+	inRequire := false
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+
+		if line == "require (" {
+			inRequire = true
+			continue
+		}
+
+		if inRequire && line == ")" {
+			inRequire = false
+			continue
+		}
+
+		if inRequire || strings.HasPrefix(line, "require ") {
+			line = strings.TrimPrefix(line, "require ")
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				deps = append(deps, graph.Dependency{
+					Module:  parts[0],
+					Version: parts[1],
+				})
+			}
+		}
+	}
+
+	sort.Slice(deps, func(i, j int) bool {
+		return deps[i].Module < deps[j].Module
+	})
+
+	return deps, nil
 }
 
 func bestEffortImportPath(absRoot, relDir string) string {
