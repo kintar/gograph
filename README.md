@@ -23,11 +23,42 @@ go install github.com/ozgurcd/gograph@latest
 
 ## Usage
 
-Navigate to your Go project and run:
-
+**1. Generate the Graph (Run this after every major code change):**
 ```bash
-gograph path/to/repo
+gograph build .
 ```
+*This instantly generates `.gograph/graph.json` and `.gograph/GRAPH_REPORT.md`.*
+
+**2. Query the Graph (Lightning fast, no re-parsing):**
+```bash
+gograph query "Auth"              # Search for symbols, files, or packages
+gograph callers "ValidateToken"   # See exactly what functions call ValidateToken
+gograph callees "InitServer"      # See exactly what InitServer calls
+gograph node "UserStruct"         # Get detailed AST info about a specific node
+```
+
+## 🤖 Integrating with AI Agents (Cursor, Claude Code, Copilot)
+
+To get the absolute best results from your AI coding assistant, copy and paste this exact prompt into your `.cursorrules`, `CLAUDE.md`, or AI system instructions:
+
+> **System Prompt:**
+> Before answering architecture, dependency, or "where is X?" questions about this repository, read `.gograph/GRAPH_REPORT.md` first. Use it as your source of truth for the repository map before randomly searching raw files. For symbol lookup, use the `gograph query "<term>"` and `gograph callers "<function>"` commands. After making structural code changes, always run `gograph build .` to keep your map up to date.
+
+## Example Output
+
+When you run `gograph build .`, the generated `GRAPH_REPORT.md` gives your AI a condensed, highly-dense context map that looks like this:
+
+**External Dependencies (Tech Stack)**
+| Module | Version |
+|--------|---------|
+| `github.com/gin-gonic/gin` | `v1.9.1` |
+| `github.com/jackc/pgx/v5` | `v5.5.5` |
+
+**Important Symbols (Top by outgoing calls)**
+| Symbol | Kind | File | Line | Calls out |
+|--------|------|------|------|-----------|
+| `(Server).Start` | method | `server.go` | 42 | 18 |
+| `ValidateAuth` | function | `auth.go` | 12 | 14 |
 
 ## Contributing
 
