@@ -22,7 +22,15 @@ import (
 const outputDir = ".gograph"
 const graphFile = ".gograph/graph.json"
 const reportFile = ".gograph/GRAPH_REPORT.md"
-const Version = "1.1.5"
+const symFile = ".gograph/graph-symbols.md"
+const depsFile = ".gograph/graph-deps.md"
+const routesFile = ".gograph/graph-routes.md"
+const sqlFile = ".gograph/graph-sql.md"
+const errorsFile = ".gograph/graph-errors.md"
+const configFile = ".gograph/graph-config.md"
+const concFile = ".gograph/graph-concurrency.md"
+const testsFile = ".gograph/graph-tests.md"
+const Version = "1.1.6"
 
 // Run is the entrypoint called from main.
 func Run(args []string) int {
@@ -53,6 +61,8 @@ func Run(args []string) int {
 		return runConcurrency(args[1:])
 	case "tests":
 		return runTests(args[1:])
+	case "capabilities":
+		return runCapabilities()
 	case "mcp":
 		return runMCP(args[1:])
 	case "help", "--help", "-h":
@@ -66,6 +76,40 @@ func Run(args []string) int {
 		printHelp()
 		return 1
 	}
+}
+
+func runCapabilities() int {
+	fmt.Println(`gograph: AST-aware Repository Navigation Tool for AI Agents
+
+INSTRUCTIONS FOR AI AGENTS:
+Do NOT use ripgrep, grep, or find to explore this repository. 
+Use gograph to understand repository structure, dependencies, and call graphs.
+To save tokens, the graph is split into targeted files in .gograph/. 
+Read .gograph/GRAPH_REPORT.md first.
+
+COMMANDS (token-optimized):
+build .              : parse AST, gen GRAPH_REPORT.md & .gograph/*
+query <str>          : search symbols/files/pkgs
+focus <pkg>          : isolate context for a package
+callers <fn>         : who calls fn
+callees <fn>         : what fn calls
+impact <sym>         : blast radius (downstream callers)
+source <sym>         : exact code of sym
+node <sym>           : AST info of sym
+fields <struct>      : fields/types of struct
+embeds <struct>      : structs embedding this struct
+interfaces <struct>  : duck-type interface check
+implementers <iface> : structs implementing iface
+public <pkg>         : exported API of pkg
+routes               : HTTP REST routes
+sql                  : raw SQL queries mapped
+errors               : custom errors/panics
+envs [str]           : os.Getenv/viper reads
+concurrency [str]    : goroutines/channels/mutexes
+tests <sym>          : tests exercising sym
+orphans              : 0 incoming calls (dead code)
+imports <pkg>        : trace external/internal usage`)
+	return 0
 }
 
 func runBuild(args []string) int {
@@ -103,17 +147,31 @@ func runBuild(args []string) int {
 		return 1
 	}
 
-	mdContent := report.Generate(g)
-	mdPath := filepath.Join(absRoot, reportFile)
-	if err := os.WriteFile(mdPath, []byte(mdContent), 0o640); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing GRAPH_REPORT.md: %v\n", err)
-		return 1
+	// Write all split markdown reports
+	reports := map[string]string{
+		reportFile: report.GenerateIndex(g),
+		symFile:    report.GenerateSymbols(g),
+		depsFile:   report.GenerateDeps(g),
+		routesFile: report.GenerateRoutes(g),
+		sqlFile:    report.GenerateSQL(g),
+		errorsFile: report.GenerateErrors(g),
+		configFile: report.GenerateConfig(g),
+		concFile:   report.GenerateConcurrency(g),
+		testsFile:  report.GenerateTests(g),
+	}
+
+	for relPath, content := range reports {
+		fullPath := filepath.Join(absRoot, relPath)
+		if err := os.WriteFile(fullPath, []byte(content), 0o640); err != nil {
+			fmt.Fprintf(os.Stderr, "error writing %s: %v\n", relPath, err)
+			return 1
+		}
 	}
 
 	fmt.Printf("  packages: %d  files: %d  symbols: %d  calls: %d\n",
 		len(g.Packages), len(g.Files), len(g.Symbols), len(g.Calls))
 	fmt.Printf("  wrote %s\n", jsonPath)
-	fmt.Printf("  wrote %s\n", mdPath)
+	fmt.Printf("  wrote %d markdown reports to %s/\n", len(reports), outputDir)
 	return 0
 }
 
@@ -575,6 +633,11 @@ Commands:
   callers <name>       Show functions that call the given function/method.
   callees <name>       Show calls made inside the given function/method.
   implementers <name>  Show structs that implement the given interface.
+  interfaces <name>    Show interfaces satisfied by the given struct.
+  envs [term]          Show environment variable configurations.
+  concurrency [term]   Show goroutines, channels, mutexes, etc.
+  tests <name>         Show tests that exercise a given symbol.
+  capabilities         Show a token-optimized list of features for coding agents.
   mcp [path]           Start an MCP server over stdio for AI integration.
   version, -v          Print version.
   help, -h             Show this help.
