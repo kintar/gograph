@@ -60,6 +60,8 @@ gograph tests "ValidateToken"     # Find which test functions exercise a named s
 gograph path "CreateUser" "sql"   # Shortest call chain between two symbols
 gograph stale                     # Check if graph.json is out of date vs source files
 gograph orphans                   # Symbols truly unreachable from any entry point
+gograph godobj                    # Find god-object struct candidates
+gograph godobj --methods 10 --fields 12 --calls 30 --top 5  # Custom thresholds
 ```
 
 **3. Run as an MCP Server (For AI Agents):**

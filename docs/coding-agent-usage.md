@@ -47,6 +47,8 @@ gograph tests [symbol]          # find which test functions exercise a named sym
 gograph path <from> <to>        # shortest call chain between two symbols (BFS traversal)
 gograph stale                   # check if graph.json is out of date vs source files
 gograph orphans                 # truly unreachable symbols (reachability from entry points)
+gograph godobj                  # find god-object struct candidates (default thresholds)
+gograph godobj --methods 10 --fields 12 --calls 30 --top 5  # custom thresholds
 gograph capabilities            # print token-optimized AI agent cheat sheet
 gograph mcp <path>              # runs an MCP server over stdio
 ```
@@ -90,7 +92,24 @@ This lets an agent confirm whether an HTTP handler actually reaches a given SQL 
 ### 10. Reachability-based dead code
 `gograph orphans` performs a BFS from all entry points (`main()`, exported functions, HTTP handlers) and flags any function or method never reached. This is stricter than a simple 0-incoming-calls check — a function called only by other dead code is also reported.
 
-### 9. Native Execution via MCP
+### 11. God-object detection
+`gograph godobj` scans the graph for struct types that exceed configurable thresholds across three dimensions: method count, field count, and total outgoing calls from their methods. It produces a ranked, severity-labeled list so an agent can quickly identify candidates for refactoring.
+
+Thresholds are all overridable:
+```
+gograph godobj --methods 10 --fields 12 --calls 30 --top 5
+```
+Example output:
+```
+God Object Candidates (methods>5, fields>8, calls>15):
+
+[HIGH    ] AuthService — 18 methods, 6 fields, 42 outgoing calls  (internal/auth/service.go:12)
+[MEDIUM  ] Server — 11 methods, 14 fields, 28 outgoing calls  (internal/server/server.go:8)
+[LOW     ] Config — 7 methods, 22 fields, 9 outgoing calls  (internal/config/config.go:3)
+```
+Results are best-effort — data structs with many fields but no methods are expected in well-structured Go code and can be tuned out by raising `--fields`.
+
+### 12. Native Execution via MCP
 Agents that support the Model Context Protocol (like Claude Desktop, Cursor, and Antigravity) can run `gograph` as a native MCP server:
 ```json
 {
