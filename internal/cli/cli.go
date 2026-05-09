@@ -22,6 +22,7 @@ import (
 const outputDir = ".gograph"
 const graphFile = ".gograph/graph.json"
 const reportFile = ".gograph/GRAPH_REPORT.md"
+const Version = "1.1.0"
 
 // Run is the entrypoint called from main.
 func Run(args []string) int {
@@ -48,6 +49,9 @@ func Run(args []string) int {
 		return runMCP(args[1:])
 	case "help", "--help", "-h":
 		printHelp()
+		return 0
+	case "version", "--version", "-v":
+		fmt.Printf("gograph version v%s\n", Version)
 		return 0
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", args[0])
@@ -451,7 +455,8 @@ Commands:
   callees <name>       Show calls made inside the given function/method.
   implementers <name>  Show structs that implement the given interface.
   mcp [path]           Start an MCP server over stdio for AI integration.
-  help                 Show this help.
+  version, -v          Print version.
+  help, -h             Show this help.
 
 Outputs:
   .gograph/graph.json      Machine-readable graph (JSON).
