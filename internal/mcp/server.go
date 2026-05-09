@@ -130,6 +130,15 @@ func Serve(g *graph.Graph) error {
 		return mcp.NewToolResultText(code), nil
 	})
 
+	// Tool: gograph_orphans
+	orphansTool := mcp.NewTool("gograph_orphans",
+		mcp.WithDescription("Find functions and methods that have 0 explicit incoming calls (potential dead code)."),
+	)
+	s.AddTool(orphansTool, func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		results := search.Orphans(g)
+		return formatResults(results), nil
+	})
+
 	// Start stdio server
 	return server.ServeStdio(s)
 }

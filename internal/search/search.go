@@ -382,3 +382,39 @@ func Source(g *graph.Graph, rootDir, symbolName string) (string, error) {
 	extracted := strings.Join(lines[start:end], "\n")
 	return fmt.Sprintf("// %s (%s:%d-%d)\n%s", target.ID, target.File, target.Line, target.EndLine, extracted), nil
 }
+
+// Orphans finds functions and methods that are never explicitly called in the codebase.
+func Orphans(g *graph.Graph) []Result {
+	var results []Result
+	calledNames := make(map[string]bool)
+
+	for _, c := range g.Calls {
+		parts := strings.Split(c.CalleeRaw, ".")
+		calledNames[parts[len(parts)-1]] = true
+		calledNames[c.CalleeRaw] = true
+	}
+
+	for _, s := range g.Symbols {
+		if s.Kind != graph.KindFunction && s.Kind != graph.KindMethod {
+			continue
+		}
+		if s.Name == "main" || s.Name == "init" {
+			continue
+		}
+
+		// Check if the name is explicitly called
+		if !calledNames[s.Name] {
+			results = append(results, Result{
+				Kind:   string(s.Kind),
+				Name:   s.Name,
+				File:   s.File,
+				Line:   s.Line,
+				Detail: "0 explicit calls found",
+				Score:  5,
+			})
+		}
+	}
+
+	sortResults(results)
+	return results
+}

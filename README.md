@@ -38,6 +38,7 @@ gograph callers "ValidateToken"   # See exactly what functions call ValidateToke
 gograph callees "InitServer"      # See exactly what InitServer calls
 gograph implementers "AuthService" # See exactly which structs implement an interface
 gograph source "ValidateToken"    # Extract the exact source code for a specific symbol
+gograph orphans                   # List functions and methods with 0 explicit incoming calls
 gograph node "UserStruct"         # Get detailed AST info about a specific node
 ```
 
