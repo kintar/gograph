@@ -36,6 +36,10 @@ gograph impact <symbol>         # find downstream callers (blast radius)
 gograph orphans                 # find dead code
 gograph routes                  # extract all HTTP REST API routes
 gograph imports <pkg>           # trace external/internal package usage
+gograph sql                     # map raw SQL queries to their execution functions
+gograph errors                  # trace a runtime panic or error log to its source line
+gograph embeds <struct>         # find which structs embed a target struct
+gograph public <pkg>            # list only the exported API surface of a package
 gograph mcp <path>              # runs an MCP server over stdio
 ```
 

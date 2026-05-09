@@ -20,6 +20,24 @@ type Graph struct {
 	Dependencies []Dependency  `json:"dependencies"`
 	Routes       []HTTPRoute   `json:"routes,omitempty"`
 	ImportEdges  []ImportEdge  `json:"import_edges,omitempty"`
+	SQLs         []SQLEdge     `json:"sqls,omitempty"`
+	Errors       []ErrorEdge   `json:"errors,omitempty"`
+}
+
+// SQLEdge represents an extracted SQL query.
+type SQLEdge struct {
+	Query    string `json:"query"`
+	Function string `json:"function"`
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+}
+
+// ErrorEdge represents an extracted error message or panic.
+type ErrorEdge struct {
+	Message  string `json:"message"`
+	Function string `json:"function"`
+	File     string `json:"file"`
+	Line     int    `json:"line"`
 }
 
 // Dependency represents a go.mod dependency.
@@ -80,6 +98,7 @@ type SymbolNode struct {
 	MethodSignature  string            `json:"method_signature,omitempty"`
 	InterfaceMethods map[string]string `json:"interface_methods,omitempty"`
 	StructFields     []StructField     `json:"struct_fields,omitempty"`
+	EmbeddedStructs  []string          `json:"embedded_structs,omitempty"`
 }
 
 // StructField represents a field inside a struct.

@@ -235,6 +235,86 @@ func Serve(g *graph.Graph, rebuild func() (*graph.Graph, error)) error {
 		return formatResults(results), nil
 	})
 
+	// Tool: gograph_sql
+	sqlTool := mcp.NewTool("gograph_sql",
+		mcp.WithDescription("Extract database SQL queries found in the codebase. You can optionally filter by term."),
+		mcp.WithString("term", mcp.Description("Optional string to filter the queries")),
+	)
+	s.AddTool(sqlTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
+		term := ""
+		if args, ok := request.Params.Arguments.(map[string]any); ok {
+			if t, ok := args["term"].(string); ok {
+				term = t
+			}
+		}
+		results := search.SQL(g, term)
+		return formatResults(results), nil
+	})
+
+	// Tool: gograph_errors
+	errorsTool := mcp.NewTool("gograph_errors",
+		mcp.WithDescription("Extract custom error messages and panics. You can optionally filter by a string."),
+		mcp.WithString("term", mcp.Description("Optional string to filter the errors")),
+	)
+	s.AddTool(errorsTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
+		term := ""
+		if args, ok := request.Params.Arguments.(map[string]any); ok {
+			if t, ok := args["term"].(string); ok {
+				term = t
+			}
+		}
+		results := search.Errors(g, term)
+		return formatResults(results), nil
+	})
+
+	// Tool: gograph_embeds
+	embedsTool := mcp.NewTool("gograph_embeds",
+		mcp.WithDescription("Find what structs embed the given target struct."),
+		mcp.WithString("struct", mcp.Required(), mcp.Description("The name of the target struct (e.g., 'Mutex')")),
+	)
+	s.AddTool(embedsTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
+		args, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			return mcp.NewToolResultError("invalid arguments"), nil
+		}
+		structName, ok := args["struct"].(string)
+		if !ok {
+			return mcp.NewToolResultError("struct must be a string"), nil
+		}
+		results := search.Embeds(g, structName)
+		return formatResults(results), nil
+	})
+
+	// Tool: gograph_public
+	publicTool := mcp.NewTool("gograph_public",
+		mcp.WithDescription("Show only the exported (public) symbols of a specific package."),
+		mcp.WithString("package", mcp.Required(), mcp.Description("The package name (e.g., 'auth')")),
+	)
+	s.AddTool(publicTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
+		args, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			return mcp.NewToolResultError("invalid arguments"), nil
+		}
+		pkgName, ok := args["package"].(string)
+		if !ok {
+			return mcp.NewToolResultError("package must be a string"), nil
+		}
+		results := search.Public(g, pkgName)
+		return formatResults(results), nil
+	})
+
 	// Start stdio server
 	return server.ServeStdio(s)
 }

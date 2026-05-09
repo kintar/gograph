@@ -21,6 +21,8 @@ type FileResult struct {
 	Calls   []graph.CallEdge
 	Env     []graph.EnvRead
 	Routes  []graph.HTTPRoute
+	SQLs    []graph.SQLEdge
+	Errors  []graph.ErrorEdge
 }
 
 // ParseFile parses a single .go file and extracts its nodes.
@@ -121,6 +123,7 @@ func extractGenDecl(fset *token.FileSet, d *ast.GenDecl, relPath, pkgName string
 		var kind graph.SymbolKind
 		var methods map[string]string
 		var fields []graph.StructField
+		var embeds []string
 		switch t := ts.Type.(type) {
 		case *ast.StructType:
 			kind = graph.KindStruct
@@ -132,6 +135,7 @@ func extractGenDecl(fset *token.FileSet, d *ast.GenDecl, relPath, pkgName string
 						tagStr = f.Tag.Value
 					}
 					if len(f.Names) == 0 {
+						embeds = append(embeds, typeStr)
 						fields = append(fields, graph.StructField{Name: typeStr, Type: typeStr, Tag: tagStr})
 					} else {
 						for _, n := range f.Names {
@@ -177,6 +181,7 @@ func extractGenDecl(fset *token.FileSet, d *ast.GenDecl, relPath, pkgName string
 			Doc:              strings.TrimSpace(doc),
 			InterfaceMethods: methods,
 			StructFields:     fields,
+			EmbeddedStructs:  embeds,
 		}
 		result.Symbols = append(result.Symbols, sym)
 	}
@@ -241,6 +246,38 @@ func extractFuncDecl(fset *token.FileSet, d *ast.FuncDecl, relPath, pkgName stri
 			// Env-var detection.
 			if ev, ok := envRead(call, callee, callPos.Line, relPath, callerName); ok {
 				result.Env = append(result.Env, ev)
+			}
+
+			// SQL Extraction
+			if strings.Contains(callee, "Query") || strings.Contains(callee, "Exec") || strings.Contains(callee, "Raw") {
+				if len(call.Args) > 0 {
+					for _, arg := range call.Args {
+						if lit, ok := arg.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+							result.SQLs = append(result.SQLs, graph.SQLEdge{
+								Query:    strings.Trim(lit.Value, "\""),
+								Function: callerName,
+								File:     relPath,
+								Line:     callPos.Line,
+							})
+							break
+						}
+					}
+				}
+			}
+
+			// Error/Panic Extraction
+			if callee == "panic" || strings.Contains(callee, "Errorf") || strings.Contains(callee, "New") {
+				for _, arg := range call.Args {
+					if lit, ok := arg.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+						result.Errors = append(result.Errors, graph.ErrorEdge{
+							Message:  strings.Trim(lit.Value, "\""),
+							Function: callerName,
+							File:     relPath,
+							Line:     callPos.Line,
+						})
+						break
+					}
+				}
 			}
 
 			result.Calls = append(result.Calls, graph.CallEdge{

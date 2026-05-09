@@ -534,3 +534,84 @@ func ExternalImports(g *graph.Graph, pkg string) []Result {
 	sortResults(results)
 	return results
 }
+
+// SQL extracts all database SQL queries found in the codebase.
+func SQL(g *graph.Graph, term string) []Result {
+	var results []Result
+	nl := strings.ToLower(term)
+	for _, sql := range g.SQLs {
+		if term == "" || strings.Contains(strings.ToLower(sql.Query), nl) {
+			results = append(results, Result{
+				Kind:   "sql",
+				Name:   sql.Query,
+				File:   sql.File,
+				Line:   sql.Line,
+				Detail: "executed by " + sql.Function,
+				Score:  10,
+			})
+		}
+	}
+	sortResults(results)
+	return results
+}
+
+// Errors extracts all custom error messages and panics.
+func Errors(g *graph.Graph, term string) []Result {
+	var results []Result
+	nl := strings.ToLower(term)
+	for _, err := range g.Errors {
+		if term == "" || strings.Contains(strings.ToLower(err.Message), nl) {
+			results = append(results, Result{
+				Kind:   "error",
+				Name:   err.Message,
+				File:   err.File,
+				Line:   err.Line,
+				Detail: "thrown by " + err.Function,
+				Score:  10,
+			})
+		}
+	}
+	sortResults(results)
+	return results
+}
+
+// Embeds shows what structs embed the target struct.
+func Embeds(g *graph.Graph, structName string) []Result {
+	var results []Result
+	for _, s := range g.Symbols {
+		for _, e := range s.EmbeddedStructs {
+			if e == structName || e == "*"+structName {
+				results = append(results, Result{
+					Kind:   "embed",
+					Name:   s.Name,
+					File:   s.File,
+					Line:   s.Line,
+					Detail: "embeds " + structName,
+					Score:  10,
+				})
+			}
+		}
+	}
+	sortResults(results)
+	return results
+}
+
+// Public shows only the exported symbols of a package.
+func Public(g *graph.Graph, pkgName string) []Result {
+	var results []Result
+	for _, s := range g.Symbols {
+		// Basic check: is the package name correct, and does it start with a capital letter?
+		if s.PackageName == pkgName && len(s.Name) > 0 && s.Name[0] >= 'A' && s.Name[0] <= 'Z' {
+			results = append(results, Result{
+				Kind:   string(s.Kind),
+				Name:   s.Name,
+				File:   s.File,
+				Line:   s.Line,
+				Detail: s.Signature,
+				Score:  10,
+			})
+		}
+	}
+	sortResults(results)
+	return results
+}

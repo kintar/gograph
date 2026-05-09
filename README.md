@@ -44,6 +44,10 @@ gograph orphans                   # List functions and methods with 0 explicit i
 gograph node "UserStruct"         # Get detailed AST info about a specific node
 gograph routes                    # Extract all HTTP REST API routes (e.g. GET /api)
 gograph imports "redis"           # Find all files that import a specific external package
+gograph sql                       # Extract database SQL queries from the AST
+gograph errors                    # Map every custom error and panic to its function
+gograph embeds "Mutex"            # See exactly which structs embed a target struct
+gograph public "internal/auth"    # Filter graph to only show exported public symbols
 ```
 
 **3. Run as an MCP Server (For AI Agents):**
