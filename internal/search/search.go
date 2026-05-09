@@ -497,3 +497,40 @@ func Impact(g *graph.Graph, name string) []Result {
 	sortResults(results)
 	return results
 }
+
+// Routes extracts all HTTP REST API routes found in the codebase.
+func Routes(g *graph.Graph) []Result {
+	var results []Result
+	for _, r := range g.Routes {
+		results = append(results, Result{
+			Kind:   "route",
+			Name:   fmt.Sprintf("%s %s", r.Method, r.Path),
+			File:   r.File,
+			Line:   r.Line,
+			Detail: "handled by " + r.Handler,
+			Score:  10,
+		})
+	}
+	sortResults(results)
+	return results
+}
+
+// ExternalImports tracks which files import a specific external package.
+func ExternalImports(g *graph.Graph, pkg string) []Result {
+	var results []Result
+	nl := strings.ToLower(pkg)
+	for _, i := range g.Imports {
+		if strings.Contains(strings.ToLower(i.ImportPath), nl) {
+			results = append(results, Result{
+				Kind:   "import",
+				Name:   i.ImportPath,
+				File:   i.FromFile,
+				Line:   0,
+				Detail: "imported by " + i.FromPackage,
+				Score:  10,
+			})
+		}
+	}
+	sortResults(results)
+	return results
+}

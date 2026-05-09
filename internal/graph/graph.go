@@ -8,22 +8,33 @@ const Version = "1"
 
 // Graph is the top-level data structure written to .gograph/graph.json.
 type Graph struct {
-	Version     string        `json:"version"`
-	GeneratedAt time.Time     `json:"generated_at"`
-	Root        string        `json:"root"`
-	Packages    []PackageNode `json:"packages"`
-	Files       []FileNode    `json:"files"`
-	Symbols     []SymbolNode  `json:"symbols"`
-	Imports     []ImportEdge  `json:"imports"`
-	Calls       []CallEdge    `json:"calls"`
-	EnvReads    []EnvRead     `json:"env_reads"`
-	Dependencies []Dependency `json:"dependencies,omitempty"`
+	Version      string        `json:"version"`
+	GeneratedAt  time.Time     `json:"generated_at"`
+	Root         string        `json:"root"`
+	Packages     []PackageNode `json:"packages"`
+	Files        []FileNode    `json:"files"`
+	Symbols      []SymbolNode  `json:"symbols"`
+	Imports      []ImportEdge  `json:"imports"`
+	Calls        []CallEdge    `json:"calls"`
+	EnvReads     []EnvRead     `json:"env_reads"`
+	Dependencies []Dependency  `json:"dependencies"`
+	Routes       []HTTPRoute   `json:"routes,omitempty"`
+	ImportEdges  []ImportEdge  `json:"import_edges,omitempty"`
 }
 
-// Dependency represents an external module dependency from go.mod.
+// Dependency represents a go.mod dependency.
 type Dependency struct {
 	Module  string `json:"module"`
 	Version string `json:"version"`
+}
+
+// HTTPRoute represents an HTTP REST endpoint found in the AST.
+type HTTPRoute struct {
+	Method  string `json:"method"`
+	Path    string `json:"path"`
+	Handler string `json:"handler"`
+	File    string `json:"file"`
+	Line    int    `json:"line"`
 }
 
 // PackageNode represents a Go package found in the repository.

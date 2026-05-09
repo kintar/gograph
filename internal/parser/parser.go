@@ -20,6 +20,7 @@ type FileResult struct {
 	Imports []graph.ImportEdge
 	Calls   []graph.CallEdge
 	Env     []graph.EnvRead
+	Routes  []graph.HTTPRoute
 }
 
 // ParseFile parses a single .go file and extracts its nodes.
@@ -72,6 +73,40 @@ func ParseFile(fset *token.FileSet, path, relPath string) (*FileResult, error) {
 			extractFuncDecl(fset, d, relPath, pkgName, result)
 		}
 	}
+
+	// Extract HTTP Routes
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		
+		var method string
+		switch f := call.Fun.(type) {
+		case *ast.SelectorExpr:
+			name := f.Sel.Name
+			if name == "GET" || name == "POST" || name == "PUT" || name == "DELETE" || name == "PATCH" || name == "OPTIONS" || name == "HEAD" || name == "Any" || name == "Handle" || name == "HandleFunc" {
+				method = name
+			}
+		}
+		if method != "" && len(call.Args) >= 1 {
+			if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				path := strings.Trim(lit.Value, "\"")
+				handler := ""
+				if len(call.Args) >= 2 {
+					handler = typeString(call.Args[1])
+				}
+				result.Routes = append(result.Routes, graph.HTTPRoute{
+					Method:  method,
+					Path:    path,
+					Handler: handler,
+					File:    relPath,
+					Line:    fset.Position(call.Pos()).Line,
+				})
+			}
+		}
+		return true
+	})
 
 	return result, nil
 }

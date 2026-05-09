@@ -11,7 +11,7 @@ import (
 )
 
 // Serve runs the gograph MCP server over stdio.
-func Serve(g *graph.Graph) error {
+func Serve(g *graph.Graph, rebuild func() (*graph.Graph, error)) error {
 	s := server.NewMCPServer(
 		"gograph",
 		"1.1.0",
@@ -23,7 +23,10 @@ func Serve(g *graph.Graph) error {
 		mcp.WithDescription("Search the Go repository for symbols, packages, files, or imports using a keyword term."),
 		mcp.WithString("term", mcp.Required(), mcp.Description("The keyword to search for (e.g., 'Auth')")),
 	)
-	s.AddTool(queryTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(queryTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
 		args, ok := request.Params.Arguments.(map[string]any)
 		if !ok {
 			return mcp.NewToolResultError("invalid arguments"), nil
@@ -41,7 +44,10 @@ func Serve(g *graph.Graph) error {
 		mcp.WithDescription("Extract highly targeted context for a single Go package, including all files, symbols, internal calls, and dependencies associated with it."),
 		mcp.WithString("package", mcp.Required(), mcp.Description("The package path or name to focus on (e.g., 'internal/auth')")),
 	)
-	s.AddTool(focusTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(focusTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
 		args, ok := request.Params.Arguments.(map[string]any)
 		if !ok {
 			return mcp.NewToolResultError("invalid arguments"), nil
@@ -59,7 +65,10 @@ func Serve(g *graph.Graph) error {
 		mcp.WithDescription("Find what functions or methods call the specified function. Useful for impact analysis."),
 		mcp.WithString("function", mcp.Required(), mcp.Description("The name of the function being called (e.g., 'ValidateToken')")),
 	)
-	s.AddTool(callersTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(callersTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
 		args, ok := request.Params.Arguments.(map[string]any)
 		if !ok {
 			return mcp.NewToolResultError("invalid arguments"), nil
@@ -77,7 +86,10 @@ func Serve(g *graph.Graph) error {
 		mcp.WithDescription("Find what functions or methods are called from inside the specified function. Useful to understand dependencies."),
 		mcp.WithString("function", mcp.Required(), mcp.Description("The name of the calling function (e.g., 'InitServer')")),
 	)
-	s.AddTool(calleesTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(calleesTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
 		args, ok := request.Params.Arguments.(map[string]any)
 		if !ok {
 			return mcp.NewToolResultError("invalid arguments"), nil
@@ -95,7 +107,10 @@ func Serve(g *graph.Graph) error {
 		mcp.WithDescription("Find all structs that implement the specified interface. Essential for understanding implicit Go interfaces and dependency injection."),
 		mcp.WithString("interface", mcp.Required(), mcp.Description("The name of the interface (e.g., 'AuthService')")),
 	)
-	s.AddTool(implementersTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(implementersTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
 		args, ok := request.Params.Arguments.(map[string]any)
 		if !ok {
 			return mcp.NewToolResultError("invalid arguments"), nil
@@ -114,6 +129,9 @@ func Serve(g *graph.Graph) error {
 		mcp.WithString("struct", mcp.Required(), mcp.Description("The name of the struct (e.g., 'User')")),
 	)
 	s.AddTool(fieldsTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
 		args, ok := request.Params.Arguments.(map[string]any)
 		if !ok {
 			return mcp.NewToolResultError("invalid arguments"), nil
@@ -131,7 +149,10 @@ func Serve(g *graph.Graph) error {
 		mcp.WithDescription("Extract the exact source code for a specific function, method, struct, or interface. Extremely efficient for reading implementation logic without reading the entire file."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("The name of the symbol (e.g., 'ValidateToken' or 'AuthService')")),
 	)
-	s.AddTool(sourceTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(sourceTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
 		args, ok := request.Params.Arguments.(map[string]any)
 		if !ok {
 			return mcp.NewToolResultError("invalid arguments"), nil
@@ -153,6 +174,9 @@ func Serve(g *graph.Graph) error {
 		mcp.WithDescription("Find functions and methods that have 0 explicit incoming calls (potential dead code)."),
 	)
 	s.AddTool(orphansTool, func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
 		results := search.Orphans(g)
 		return formatResults(results), nil
 	})
@@ -163,6 +187,9 @@ func Serve(g *graph.Graph) error {
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("The name of the symbol (e.g., 'ValidateToken')")),
 	)
 	s.AddTool(impactTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
 		args, ok := request.Params.Arguments.(map[string]any)
 		if !ok {
 			return mcp.NewToolResultError("invalid arguments"), nil
@@ -172,6 +199,39 @@ func Serve(g *graph.Graph) error {
 			return mcp.NewToolResultError("symbol must be a string"), nil
 		}
 		results := search.Impact(g, sym)
+		return formatResults(results), nil
+	})
+
+	// Tool: gograph_routes
+	routesTool := mcp.NewTool("gograph_routes",
+		mcp.WithDescription("Extract all HTTP REST API routes found in the codebase (e.g. GET /api)."),
+	)
+	s.AddTool(routesTool, func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
+		results := search.Routes(g)
+		return formatResults(results), nil
+	})
+
+	// Tool: gograph_imports
+	importsTool := mcp.NewTool("gograph_imports",
+		mcp.WithDescription("Find all files that import a specific external package. Useful to trace where third-party libraries are used."),
+		mcp.WithString("package", mcp.Required(), mcp.Description("The name of the package (e.g., 'github.com/redis/go-redis')")),
+	)
+	s.AddTool(importsTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
+		args, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			return mcp.NewToolResultError("invalid arguments"), nil
+		}
+		pkg, ok := args["package"].(string)
+		if !ok {
+			return mcp.NewToolResultError("package must be a string"), nil
+		}
+		results := search.ExternalImports(g, pkg)
 		return formatResults(results), nil
 	})
 
