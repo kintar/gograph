@@ -4,7 +4,7 @@ CMD=./cmd/gograph
 
 .PHONY: build test run-build clean bump-patch bump-minor bump-major
 
-build:
+build: bump-patch
 	@mkdir -p $(BUILD_DIR)
 	go build -o $(BUILD_DIR)/$(BINARY) $(CMD)
 	@echo "Built $(BUILD_DIR)/$(BINARY)"
@@ -19,10 +19,10 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 bump-patch:
-	bump2version patch
+	bump2version patch --allow-dirty
 
 bump-minor:
-	bump2version minor
+	bump2version minor --allow-dirty
 
 bump-major:
-	bump2version major
+	bump2version major --allow-dirty
