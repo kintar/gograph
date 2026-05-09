@@ -12,17 +12,17 @@ import (
 // ComplexityResult holds the cyclomatic complexity score for a single function.
 type ComplexityResult struct {
 	// Symbol is the fully-qualified symbol ID (e.g. "(Server).Start").
-	Symbol string
+	Symbol string `json:"symbol"`
 	// File is the source file containing the function.
-	File string
+	File string `json:"file"`
 	// Line is the line number of the function declaration.
-	Line int
+	Line int `json:"line"`
 	// Score is the cyclomatic complexity estimate.
 	// A score of 1 means a single straight-line path (no branches).
 	// Each branch-inducing construct adds 1.
-	Score int
+	Score int `json:"score"`
 	// Label is a human-readable severity: "LOW", "MEDIUM", "HIGH", "VERY HIGH".
-	Label string
+	Label string `json:"label"`
 }
 
 // complexityLabel converts a numeric score to a severity label using

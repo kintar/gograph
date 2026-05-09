@@ -10,12 +10,12 @@ import (
 // of a package.
 type DepsResult struct {
 	// Package is the short name of the queried package.
-	Package string
+	Package string `json:"package"`
 	// Direct lists the import paths directly imported by this package.
-	Direct []string
+	Direct []string `json:"direct"`
 	// Transitive lists all import paths reachable transitively (only when
 	// requested). Includes Direct. Ordered BFS from the root package.
-	Transitive []string
+	Transitive []string `json:"transitive,omitempty"`
 }
 
 // Deps returns the import dependencies of the package whose short name or

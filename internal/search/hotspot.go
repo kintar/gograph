@@ -8,19 +8,12 @@ import (
 )
 
 // HotspotResult is a symbol ranked by how many call paths flow through it.
-// High-score symbols are the "load-bearing" functions an agent must understand
-// before making changes — reading these reduces exploratory file-reading.
 type HotspotResult struct {
-	// Name is the display name of the symbol (e.g. "(Server).Start").
-	Name string
-	// Kind is the symbol kind: "function" or "method".
-	Kind string
-	// File is the source file containing the symbol.
-	File string
-	// Line is the line number of the declaration.
-	Line int
-	// IncomingCalls is the number of distinct call sites that call this symbol.
-	IncomingCalls int
+	Name          string `json:"name"`
+	Kind          string `json:"kind"`
+	File          string `json:"file"`
+	Line          int    `json:"line"`
+	IncomingCalls int    `json:"incoming_calls"`
 }
 
 // Hotspot ranks all functions and methods by incoming call count (fan-in).

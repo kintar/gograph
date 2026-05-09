@@ -82,7 +82,15 @@ gograph deps "internal/auth" --transitive  # Full transitive closure
 gograph changes                   # New/modified/deleted symbols since last build
 ```
 
-**3. Run as an MCP Server (For AI Agents):**
+**3. Agent JSON Integration:**
+All query commands support the `--json` flag to return a stable, machine-parseable envelope:
+```bash
+gograph callers "ValidateToken" --json
+```
+*Returns: `{"schema_version": "1", "command": "callers", "status": "ok", "count": 2, "results": [...]}`*
+
+
+**4. Run as an MCP Server (For AI Agents):**
 If you want to give your AI agent native tool execution capabilities, `gograph` has a built-in [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server.
 ```bash
 gograph mcp .

@@ -30,23 +30,23 @@ const (
 // ChangedSymbol is a symbol affected by source changes since the last build.
 type ChangedSymbol struct {
 	// Name is the symbol name or declaration identifier.
-	Name string
+	Name string `json:"name"`
 	// File is the source file path.
-	File string
+	File string `json:"file"`
 	// Line is the line number (0 for deleted symbols where the file is gone).
-	Line int
+	Line int `json:"line,omitempty"`
 	// Status classifies how this symbol was affected.
-	Status ChangeStatus
+	Status ChangeStatus `json:"status"`
 }
 
 // ChangesResult is returned by Changes.
 type ChangesResult struct {
 	// GraphAge is when graph.json was last generated.
-	GraphAge time.Time
+	GraphAge time.Time `json:"graph_age"`
 	// ChangedFiles lists source files newer than the graph.
-	ChangedFiles []string
+	ChangedFiles []string `json:"changed_files"`
 	// Symbols lists all symbols affected by the source changes.
-	Symbols []ChangedSymbol
+	Symbols []ChangedSymbol `json:"symbols"`
 }
 
 // Changes compares the current source tree against graph.json to report what

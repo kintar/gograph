@@ -164,12 +164,21 @@ func ReachableOrphans(g *graph.Graph) []Result {
 
 // StaleResult reports the freshness of graph.json relative to source files.
 type StaleResult struct {
-	// IsStale is true when at least one .go file is newer than graph.json.
-	IsStale bool
-	// GraphAge is the human-readable generation time from graph.json.
-	GraphAge string
-	// ChangedFiles holds repo-relative paths of source files newer than the graph.
-	ChangedFiles []string
+	IsStale      bool     `json:"is_stale"`
+	GraphAge     string   `json:"graph_age"`
+	ChangedFiles []string `json:"changed_files,omitempty"`
+}
+
+// GodObjectCandidate is a struct that exceeded at least one threshold.
+type GodObjectCandidate struct {
+	Name          string `json:"name"`
+	File          string `json:"file"`
+	Line          int    `json:"line"`
+	MethodCount   int    `json:"method_count"`
+	FieldCount    int    `json:"field_count"`
+	OutgoingCalls int    `json:"outgoing_calls"`
+	Severity      string `json:"severity"`
+	Score         int    `json:"score"`
 }
 
 // Stale compares graph.json's GeneratedAt timestamp with the mtime of every
@@ -234,24 +243,6 @@ func DefaultGodObjectParams() GodObjectParams {
 	}
 }
 
-// GodObjectCandidate is a struct that exceeded at least one threshold.
-type GodObjectCandidate struct {
-	// Name is the struct name.
-	Name string
-	// File and Line point to the struct definition.
-	File string
-	Line int
-	// MethodCount is the number of methods defined on this struct.
-	MethodCount int
-	// FieldCount is the number of declared fields.
-	FieldCount int
-	// OutgoingCalls is the total number of call expressions across all methods.
-	OutgoingCalls int
-	// Severity is one of: "LOW", "MEDIUM", "HIGH", "CRITICAL".
-	Severity string
-	// Score is used for ranking (higher = worse).
-	Score int
-}
 
 // severity determines a label based on how far the candidate exceeds thresholds.
 func severity(methodCount, fieldCount, outgoingCalls int, p GodObjectParams) (string, int) {

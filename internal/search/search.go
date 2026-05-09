@@ -10,14 +10,20 @@ import (
 	"github.com/ozgurcd/gograph/internal/graph"
 )
 
-// Result is a single match returned by Query.
+// Result is a single match returned by any search function.
 type Result struct {
-	Kind   string
-	Name   string
-	File   string
-	Line   int
-	Detail string
-	Score  int
+	Kind   string `json:"kind"`
+	Name   string `json:"name"`
+	File   string `json:"file,omitempty"`
+	Line   int    `json:"line,omitempty"`
+	Detail string `json:"detail,omitempty"`
+	Score  int    `json:"-"` // internal ranking only, not serialised
+
+	// CallSiteFile and CallSiteLine carry the exact location of the call
+	// expression that produced this result (callers/callees). Empty for
+	// non-call results. This is the provenance field.
+	CallSiteFile string `json:"call_site_file,omitempty"`
+	CallSiteLine int    `json:"call_site_line,omitempty"`
 }
 
 // String returns a compact human-readable representation.
@@ -26,10 +32,14 @@ func (r Result) String() string {
 	if r.Line > 0 {
 		loc = fmt.Sprintf("%s:%d", r.File, r.Line)
 	}
-	if r.Detail != "" {
-		return fmt.Sprintf("[%s] %s — %s  (%s)", r.Kind, r.Name, r.Detail, loc)
+	provenance := ""
+	if r.CallSiteFile != "" {
+		provenance = fmt.Sprintf(" [call @ %s:%d]", r.CallSiteFile, r.CallSiteLine)
 	}
-	return fmt.Sprintf("[%s] %s  (%s)", r.Kind, r.Name, loc)
+	if r.Detail != "" {
+		return fmt.Sprintf("[%s] %s — %s  (%s)%s", r.Kind, r.Name, r.Detail, loc, provenance)
+	}
+	return fmt.Sprintf("[%s] %s  (%s)%s", r.Kind, r.Name, loc, provenance)
 }
 
 // Query searches g for all occurrences of any of the given terms (OR logic)
@@ -135,32 +145,40 @@ func Node(g *graph.Graph, name string) []Result {
 }
 
 // Callers returns functions/methods that contain a call expression matching name.
+// Each result includes call-site provenance (CallSiteFile, CallSiteLine) pointing
+// to the exact line of the call expression, not just the enclosing function.
 func Callers(g *graph.Graph, name string) []Result {
 	nl := strings.ToLower(name)
-	seen := make(map[string]bool)
 	callerSymbols := make(map[string]graph.SymbolNode)
 	for _, s := range g.Symbols {
 		callerSymbols[s.ID] = s
 	}
 
+	// Collect all matching call edges (one per unique call site).
+	type siteKey struct{ id, callFile string; callLine int }
+	seen := make(map[siteKey]bool)
 	var results []Result
 	for _, c := range g.Calls {
 		if strings.Contains(strings.ToLower(c.CalleeRaw), nl) {
-			if !seen[c.CallerSymbolID] {
-				seen[c.CallerSymbolID] = true
-				sym, ok := callerSymbols[c.CallerSymbolID]
-				file, line := c.File, 0
-				if ok {
-					file, line = sym.File, sym.Line
-				}
-				results = append(results, Result{
-					Kind:   "caller",
-					Name:   c.CallerName,
-					File:   file,
-					Line:   line,
-					Detail: fmt.Sprintf("calls %s", c.CalleeRaw),
-				})
+			k := siteKey{c.CallerSymbolID, c.File, c.Line}
+			if seen[k] {
+				continue
 			}
+			seen[k] = true
+			sym, ok := callerSymbols[c.CallerSymbolID]
+			file, line := c.File, 0
+			if ok {
+				file, line = sym.File, sym.Line
+			}
+			results = append(results, Result{
+				Kind:         "caller",
+				Name:         c.CallerName,
+				File:         file,
+				Line:         line,
+				Detail:       fmt.Sprintf("calls %s", c.CalleeRaw),
+				CallSiteFile: c.File,
+				CallSiteLine: c.Line,
+			})
 		}
 	}
 	sortResults(results)

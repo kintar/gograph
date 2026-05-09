@@ -10,20 +10,14 @@ import (
 // PackageCoupling holds fan-in and fan-out metrics for a single package.
 type PackageCoupling struct {
 	// Package is the import path of the package (e.g. "github.com/foo/bar/internal/auth").
-	Package string
+	Package string `json:"package"`
 	// FanOut is the number of distinct packages this package imports.
-	// A high fan-out means this package depends on many others — it is
-	// sensitive to changes in its dependencies.
-	FanOut int
+	FanOut int `json:"fan_out"`
 	// FanIn is the number of distinct packages that import this package.
-	// A high fan-in means this package is a dependency of many others —
-	// changes to it have a wide blast radius.
-	FanIn int
+	FanIn int `json:"fan_in"`
 	// Instability is FanOut / (FanIn + FanOut), range [0.0, 1.0].
-	// 0.0 = maximally stable (nothing it depends on changes),
-	// 1.0 = maximally unstable (depends on everything, nothing depends on it).
 	// -1.0 is reported when FanIn + FanOut == 0 (isolated package).
-	Instability float64
+	Instability float64 `json:"instability"`
 }
 
 // Coupling computes fan-in, fan-out, and instability for every package in the

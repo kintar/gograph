@@ -39,6 +39,19 @@ func Run(args []string) int {
 		printHelp()
 		return 0
 	}
+
+	// Strip --json from args before dispatch; set the package-level flag.
+	jsonMode = false
+	filtered := args[:0]
+	for _, a := range args {
+		if a == "--json" {
+			jsonMode = true
+		} else {
+			filtered = append(filtered, a)
+		}
+	}
+	args = filtered
+
 	switch args[0] {
 	case "build":
 		return runBuild(args[1:])
@@ -127,6 +140,7 @@ To save tokens, the graph is split into targeted files in .gograph/.
 Read .gograph/GRAPH_REPORT.md first.
 
 COMMANDS (token-optimized):
+(Note: All search/navigation commands support --json for stable machine parsing)
 build .              : parse AST, gen GRAPH_REPORT.md & .gograph/*
 query <str>          : search symbols/files/pkgs
 focus <pkg>          : isolate context for a package
@@ -290,25 +304,42 @@ func BuildGraph(absRoot string) (*graph.Graph, error) {
 	return g, nil
 }
 
-func runQuery(args []string) int {
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: gograph query <term...>")
-		return 1
+// printResults prints []Result in text or JSON mode.
+// cmd is the command name; query is the search term (may be empty).
+// emptyMsg is printed when results are empty in text mode.
+// Returns the exit code (always 0 for empty results).
+func printResults(cmd, query string, results []search.Result, emptyMsg string) int {
+	if jsonMode {
+		return PrintJSON(okEnvelope(cmd, query, results, len(results)))
 	}
-	g, err := loadGraph(".")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	results := search.Query(g, args)
 	if len(results) == 0 {
-		fmt.Println("no results")
+		fmt.Println(emptyMsg)
 		return 0
 	}
 	for _, r := range results {
 		fmt.Println(r.String())
 	}
 	return 0
+}
+
+func runQuery(args []string) int {
+	if len(args) == 0 {
+		if jsonMode {
+			return PrintJSON(errEnvelope("query", "usage: gograph query <term...>"))
+		}
+		fmt.Fprintln(os.Stderr, "usage: gograph query <term...>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("query", err.Error()))
+		}
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.Query(g, args)
+	return printResults("query", strings.Join(args, " "), results, "no results")
 }
 
 func runFocus(args []string) int {
@@ -322,14 +353,7 @@ func runFocus(args []string) int {
 		return 1
 	}
 	results := search.Focus(g, args[0])
-	if len(results) == 0 {
-		fmt.Printf("no focus data found for package %q\n", args[0])
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("focus", args[0], results, fmt.Sprintf("no focus data found for package %q", args[0]))
 }
 
 func runNode(args []string) int {
@@ -343,14 +367,7 @@ func runNode(args []string) int {
 		return 1
 	}
 	results := search.Node(g, strings.Join(args, " "))
-	if len(results) == 0 {
-		fmt.Println("no results")
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("node", strings.Join(args, " "), results, "no results")
 }
 
 func runCallers(args []string) int {
@@ -364,14 +381,7 @@ func runCallers(args []string) int {
 		return 1
 	}
 	results := search.Callers(g, strings.Join(args, " "))
-	if len(results) == 0 {
-		fmt.Println("no callers found")
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("callers", strings.Join(args, " "), results, "no callers found")
 }
 
 func runCallees(args []string) int {
@@ -385,14 +395,7 @@ func runCallees(args []string) int {
 		return 1
 	}
 	results := search.Callees(g, strings.Join(args, " "))
-	if len(results) == 0 {
-		fmt.Println("no callees found")
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("callees", strings.Join(args, " "), results, "no callees found")
 }
 
 func runImplementers(args []string) int {
@@ -406,14 +409,7 @@ func runImplementers(args []string) int {
 		return 1
 	}
 	results := search.Implementers(g, args[0])
-	if len(results) == 0 {
-		fmt.Printf("No structs found implementing '%s'.\n", args[0])
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("implementers", args[0], results, fmt.Sprintf("No structs found implementing '%s'.", args[0]))
 }
 
 func runEnvs(args []string) int {
@@ -427,14 +423,7 @@ func runEnvs(args []string) int {
 		term = args[0]
 	}
 	results := search.Envs(g, term)
-	if len(results) == 0 {
-		fmt.Println("No environment variable reads found.")
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("envs", term, results, "No environment variable reads found.")
 }
 
 func runInterfaces(args []string) int {
@@ -448,14 +437,7 @@ func runInterfaces(args []string) int {
 		return 1
 	}
 	results := search.Interfaces(g, args[0])
-	if len(results) == 0 {
-		fmt.Printf("No interfaces found satisfied by '%s'.\n", args[0])
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("interfaces", args[0], results, fmt.Sprintf("No interfaces found satisfied by '%s'.", args[0]))
 }
 
 func runConcurrency(args []string) int {
@@ -469,14 +451,7 @@ func runConcurrency(args []string) int {
 		term = args[0]
 	}
 	results := search.Concurrency(g, term)
-	if len(results) == 0 {
-		fmt.Println("No concurrency primitives found.")
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("concurrency", term, results, "No concurrency primitives found.")
 }
 
 func runTests(args []string) int {
@@ -490,18 +465,11 @@ func runTests(args []string) int {
 		term = args[0]
 	}
 	results := search.Tests(g, term)
-	if len(results) == 0 {
-		if term != "" {
-			fmt.Printf("No test functions found exercising '%s'.\n", term)
-		} else {
-			fmt.Println("No test edges found.")
-		}
-		return 0
+	emptyMsg := "No test edges found."
+	if term != "" {
+		emptyMsg = fmt.Sprintf("No test functions found exercising '%s'.", term)
 	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("tests", term, results, emptyMsg)
 }
 
 func runMCP(args []string) int {
@@ -674,7 +642,11 @@ func printHelp() {
 	fmt.Print(`gograph — local AST-based Go repository context indexer for AI agents
 
 USAGE
-  gograph <command> [arguments]
+  gograph <command> [arguments] [--json]
+
+GLOBAL FLAGS
+  --json                     Output strictly in a machine-parseable JSON envelope.
+                             Recommended for all automated agent usage.
 
 INDEXING
   build [path]               Walk and parse a Go repository. Generates graph.json
@@ -783,11 +755,17 @@ func runPath(args []string) int {
 func runStale() int {
 	g, err := loadGraph(".")
 	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("stale", err.Error()))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	absRoot, _ := filepath.Abs(".")
 	sr := search.Stale(g, absRoot)
+	if jsonMode {
+		return PrintJSON(okEnvelope("stale", "", sr, len(sr.ChangedFiles)))
+	}
 	if !sr.IsStale {
 		fmt.Printf("Graph is up to date (generated: %s).\n", sr.GraphAge)
 		return 0
@@ -804,19 +782,14 @@ func runStale() int {
 func runOrphans() int {
 	g, err := loadGraph(".")
 	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("orphans", err.Error()))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	results := search.ReachableOrphans(g)
-	if len(results) == 0 {
-		fmt.Println("No unreachable symbols found.")
-		return 0
-	}
-	fmt.Printf("%d unreachable symbol(s) found:\n", len(results))
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("orphans", "", results, "No unreachable symbols found.")
 }
 
 // runGodObj detects god-object struct candidates using configurable thresholds.
@@ -852,11 +825,17 @@ func runGodObj(args []string) int {
 
 	g, err := loadGraph(".")
 	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("godobj", err.Error()))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
 	candidates := search.GodObjects(g, p)
+	if jsonMode {
+		return PrintJSON(okEnvelope("godobj", "", candidates, len(candidates)))
+	}
 	if len(candidates) == 0 {
 		fmt.Printf("No god-object candidates found (methods>%d, fields>%d, calls>%d).\n",
 			p.MinMethods, p.MinFields, p.MinCalls)
@@ -880,10 +859,16 @@ func runComplexity(args []string) int {
 	}
 	g, err := loadGraph(".")
 	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("complexity", err.Error()))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	results := search.Complexity(g, term)
+	if jsonMode {
+		return PrintJSON(okEnvelope("complexity", term, results, len(results)))
+	}
 	if len(results) == 0 {
 		if term != "" {
 			fmt.Printf("No functions found matching %q.\n", term)
@@ -908,10 +893,16 @@ func runCoupling(args []string) int {
 	}
 	g, err := loadGraph(".")
 	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("coupling", err.Error()))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	results := search.Coupling(g, term)
+	if jsonMode {
+		return PrintJSON(okEnvelope("coupling", term, results, len(results)))
+	}
 	if len(results) == 0 {
 		if term != "" {
 			fmt.Printf("No packages found matching %q.\n", term)
@@ -942,14 +933,27 @@ func runContext(args []string) int {
 	term := strings.Join(args, " ")
 	g, err := loadGraph(".")
 	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("context", err.Error()))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	root, _ := filepath.Abs(".")
 	result := search.Context(g, root, term)
 	if result == nil {
+		if jsonMode {
+			return PrintJSON(okEnvelope("context", term, nil, 0))
+		}
 		fmt.Printf("No symbol found matching %q.\n", term)
 		return 0
+	}
+	if jsonMode {
+		count := len(result.Node) + len(result.Callers) + len(result.Callees) + len(result.Tests)
+		if result.Source != "" {
+			count++
+		}
+		return PrintJSON(okEnvelope("context", term, result, count))
 	}
 
 	fmt.Printf("=== CONTEXT: %s ===\n\n", term)
@@ -1009,10 +1013,16 @@ func runHotspot(args []string) int {
 	}
 	g, err := loadGraph(".")
 	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("hotspot", err.Error()))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	results := search.Hotspot(g, top)
+	if jsonMode {
+		return PrintJSON(okEnvelope("hotspot", "", results, len(results)))
+	}
 	if len(results) == 0 {
 		fmt.Println("No hotspot data found (no call edges in graph).")
 		return 0
@@ -1043,13 +1053,22 @@ func runDeps(args []string) int {
 	}
 	g, err := loadGraph(".")
 	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("deps", err.Error()))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	result := search.Deps(g, pkg, transitive)
 	if result == nil {
+		if jsonMode {
+			return PrintJSON(okEnvelope("deps", pkg, nil, 0))
+		}
 		fmt.Printf("No package found matching %q.\n", pkg)
 		return 0
+	}
+	if jsonMode {
+		return PrintJSON(okEnvelope("deps", pkg, result, len(result.Direct)+len(result.Transitive)))
 	}
 	fmt.Printf("Package: %s\n\nDirect imports (%d):\n", result.Package, len(result.Direct))
 	for _, imp := range result.Direct {
@@ -1068,11 +1087,17 @@ func runDeps(args []string) int {
 func runChanges() int {
 	g, err := loadGraph(".")
 	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("changes", err.Error()))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	root, _ := filepath.Abs(".")
 	result := search.Changes(g, root)
+	if jsonMode {
+		return PrintJSON(okEnvelope("changes", "", result, len(result.ChangedFiles)+len(result.Symbols)))
+	}
 
 	if len(result.ChangedFiles) == 0 && len(result.Symbols) == 0 {
 		fmt.Printf("No changes detected (graph generated: %s).\n",
@@ -1114,19 +1139,32 @@ func runChanges() int {
 // runSource extracts the raw source code of a named symbol.
 func runSource(args []string) int {
 	if len(args) == 0 {
+		if jsonMode {
+			return PrintJSON(errEnvelope("source", "usage: gograph source <name>"))
+		}
 		fmt.Fprintln(os.Stderr, "usage: gograph source <name>")
 		return 1
 	}
 	g, err := loadGraph(".")
 	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("source", err.Error()))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	term := strings.Join(args, " ")
 	root, _ := filepath.Abs(".")
-	src, err := search.Source(g, root, strings.Join(args, " "))
+	src, err := search.Source(g, root, term)
 	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("source", err.Error()))
+		}
 		fmt.Fprintf(os.Stderr, "source: %v\n", err)
 		return 1
+	}
+	if jsonMode {
+		return PrintJSON(okEnvelope("source", term, src, 1))
 	}
 	fmt.Println(src)
 	return 0
@@ -1144,14 +1182,7 @@ func runPublic(args []string) int {
 		return 1
 	}
 	results := search.Public(g, args[0])
-	if len(results) == 0 {
-		fmt.Printf("No exported symbols found for package %q.\n", args[0])
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("public", args[0], results, fmt.Sprintf("No exported symbols found for package %q.", args[0]))
 }
 
 // runFields lists all fields and types of a struct.
@@ -1166,14 +1197,7 @@ func runFields(args []string) int {
 		return 1
 	}
 	results := search.Fields(g, args[0])
-	if len(results) == 0 {
-		fmt.Printf("No fields found for struct %q.\n", args[0])
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("fields", args[0], results, fmt.Sprintf("No fields found for struct %q.", args[0]))
 }
 
 // runEmbeds finds which structs embed the given struct.
@@ -1188,14 +1212,7 @@ func runEmbeds(args []string) int {
 		return 1
 	}
 	results := search.Embeds(g, args[0])
-	if len(results) == 0 {
-		fmt.Printf("No structs found embedding %q.\n", args[0])
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("embeds", args[0], results, fmt.Sprintf("No structs found embedding %q.", args[0]))
 }
 
 // runImports finds all files importing a given package path.
@@ -1210,14 +1227,7 @@ func runImports(args []string) int {
 		return 1
 	}
 	results := search.ExternalImports(g, args[0])
-	if len(results) == 0 {
-		fmt.Printf("No files found importing %q.\n", args[0])
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("imports", args[0], results, fmt.Sprintf("No files found importing %q.", args[0]))
 }
 
 // runImpact traverses the call graph backwards to find all symbols that eventually call the target.
@@ -1232,14 +1242,7 @@ func runImpact(args []string) int {
 		return 1
 	}
 	results := search.Impact(g, strings.Join(args, " "))
-	if len(results) == 0 {
-		fmt.Printf("No callers found in blast radius of %q.\n", args[0])
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("impact", strings.Join(args, " "), results, fmt.Sprintf("No callers found in blast radius of %q.", args[0]))
 }
 
 // runRoutes lists all HTTP REST API routes and their handler functions.
@@ -1250,14 +1253,7 @@ func runRoutes() int {
 		return 1
 	}
 	results := search.Routes(g)
-	if len(results) == 0 {
-		fmt.Println("No HTTP routes found.")
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("routes", "", results, "No HTTP routes found.")
 }
 
 // runSQL lists raw SQL queries mapped to the functions that run them.
@@ -1272,14 +1268,7 @@ func runSQL(args []string) int {
 		return 1
 	}
 	results := search.SQL(g, term)
-	if len(results) == 0 {
-		fmt.Println("No SQL queries found.")
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("sql", term, results, "No SQL queries found.")
 }
 
 // runErrors lists custom error variables and panics mapped to their source.
@@ -1294,12 +1283,5 @@ func runErrors(args []string) int {
 		return 1
 	}
 	results := search.Errors(g, term)
-	if len(results) == 0 {
-		fmt.Println("No custom errors or panics found.")
-		return 0
-	}
-	for _, r := range results {
-		fmt.Println(r.String())
-	}
-	return 0
+	return printResults("errors", term, results, "No custom errors or panics found.")
 }
