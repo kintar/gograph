@@ -90,6 +90,24 @@ func Serve(g *graph.Graph) error {
 		return formatResults(results), nil
 	})
 
+	// Tool: gograph_implementers
+	implementersTool := mcp.NewTool("gograph_implementers",
+		mcp.WithDescription("Find all structs that implement the specified interface. Essential for understanding implicit Go interfaces and dependency injection."),
+		mcp.WithString("interface", mcp.Required(), mcp.Description("The name of the interface (e.g., 'AuthService')")),
+	)
+	s.AddTool(implementersTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			return mcp.NewToolResultError("invalid arguments"), nil
+		}
+		iface, ok := args["interface"].(string)
+		if !ok {
+			return mcp.NewToolResultError("interface must be a string"), nil
+		}
+		results := search.Implementers(g, iface)
+		return formatResults(results), nil
+	})
+
 	// Start stdio server
 	return server.ServeStdio(s)
 }

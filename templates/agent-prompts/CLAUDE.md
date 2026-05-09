@@ -20,10 +20,11 @@ Before answering any architectural questions, proposing a refactor, or asking "w
 
 ## 2. Searching and Navigation
 Do not use `grep` or `find` to locate symbols. 
-If you have MCP access to `gograph`, use your native tools (`gograph_query`, `gograph_focus`, `gograph_callers`, `gograph_callees`).
+If you have MCP access to `gograph`, use your native tools (`gograph_query`, `gograph_focus`, `gograph_callers`, `gograph_callees`, `gograph_implementers`).
 If you do not have MCP access, use the pre-compiled graph via the CLI:
 - Run `gograph query "<term>"` to search for symbols, files, or packages.
 - Run `gograph focus "<package>"` to isolate context for a specific package.
+- Run `gograph implementers "<interface>"` to see which structs implement an interface.
 - Run `gograph callers "<function>"` to find where a function is used.
 - Run `gograph callees "<function>"` to see what internal dependencies a function has.
 

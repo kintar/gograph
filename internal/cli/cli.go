@@ -42,6 +42,8 @@ func Run(args []string) int {
 		return runCallers(args[1:])
 	case "callees":
 		return runCallees(args[1:])
+	case "implementers":
+		return runImplementers(args[1:])
 	case "mcp":
 		return runMCP(args[1:])
 	case "help", "--help", "-h":
@@ -261,6 +263,27 @@ func runCallees(args []string) int {
 	return 0
 }
 
+func runImplementers(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: gograph implementers <interface>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load graph: %v\n", err)
+		return 1
+	}
+	results := search.Implementers(g, args[0])
+	if len(results) == 0 {
+		fmt.Printf("No structs found implementing '%s'.\n", args[0])
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
 func runMCP(args []string) int {
 	root := "."
 	if len(args) > 0 {
@@ -426,6 +449,7 @@ Commands:
   node <name>          Show details for a symbol/package/file.
   callers <name>       Show functions that call the given function/method.
   callees <name>       Show calls made inside the given function/method.
+  implementers <name>  Show structs that implement the given interface.
   mcp [path]           Start an MCP server over stdio for AI integration.
   help                 Show this help.
 

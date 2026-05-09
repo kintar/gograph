@@ -275,3 +275,67 @@ func Focus(g *graph.Graph, pkgName string) []Result {
 	sortResults(results)
 	return results
 }
+
+// Implementers finds all structs that implement the given interface.
+func Implementers(g *graph.Graph, interfaceName string) []Result {
+	nl := strings.ToLower(interfaceName)
+	var iface *graph.SymbolNode
+	var results []Result
+
+	for i, s := range g.Symbols {
+		if s.Kind == graph.KindInterface && strings.ToLower(s.Name) == nl {
+			iface = &g.Symbols[i]
+			break
+		}
+	}
+
+	if iface == nil || len(iface.InterfaceMethods) == 0 {
+		return results
+	}
+
+	var structs []graph.SymbolNode
+	for _, s := range g.Symbols {
+		if s.Kind == graph.KindStruct {
+			structs = append(structs, s)
+		}
+	}
+
+	methodsByReceiver := make(map[string][]graph.SymbolNode)
+	for _, s := range g.Symbols {
+		if s.Kind == graph.KindMethod && s.Receiver != "" {
+			recv := strings.TrimPrefix(s.Receiver, "*")
+			methodsByReceiver[recv] = append(methodsByReceiver[recv], s)
+		}
+	}
+
+	for _, str := range structs {
+		methods := methodsByReceiver[str.Name]
+		if len(methods) < len(iface.InterfaceMethods) {
+			continue
+		}
+
+		implemented := 0
+		for reqName, reqSig := range iface.InterfaceMethods {
+			for _, m := range methods {
+				if m.Name == reqName && m.MethodSignature == reqSig {
+					implemented++
+					break
+				}
+			}
+		}
+
+		if implemented == len(iface.InterfaceMethods) {
+			results = append(results, Result{
+				Kind:   "struct",
+				Name:   str.Name,
+				File:   str.File,
+				Line:   str.Line,
+				Detail: "implements " + iface.Name,
+				Score:  10,
+			})
+		}
+	}
+
+	sortResults(results)
+	return results
+}

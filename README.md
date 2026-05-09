@@ -36,6 +36,7 @@ gograph query "Auth"              # Search for symbols, files, or packages
 gograph focus "internal/auth"     # Generate a highly targeted context for one package
 gograph callers "ValidateToken"   # See exactly what functions call ValidateToken
 gograph callees "InitServer"      # See exactly what InitServer calls
+gograph implementers "AuthService" # See exactly which structs implement an interface
 gograph node "UserStruct"         # Get detailed AST info about a specific node
 ```
 

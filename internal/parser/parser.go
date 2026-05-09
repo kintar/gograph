@@ -84,11 +84,23 @@ func extractGenDecl(fset *token.FileSet, d *ast.GenDecl, relPath, pkgName string
 			continue
 		}
 		var kind graph.SymbolKind
-		switch ts.Type.(type) {
+		var methods map[string]string
+		switch t := ts.Type.(type) {
 		case *ast.StructType:
 			kind = graph.KindStruct
 		case *ast.InterfaceType:
 			kind = graph.KindInterface
+			if t.Methods != nil {
+				methods = make(map[string]string)
+				for _, m := range t.Methods.List {
+					if len(m.Names) > 0 {
+						if ft, ok := m.Type.(*ast.FuncType); ok {
+							sig := funcTypeSignature(ft)
+							methods[m.Names[0].Name] = sig
+						}
+					}
+				}
+			}
 		default:
 			continue
 		}
@@ -103,14 +115,15 @@ func extractGenDecl(fset *token.FileSet, d *ast.GenDecl, relPath, pkgName string
 		}
 
 		sym := graph.SymbolNode{
-			ID:          fmt.Sprintf("%s::%s", relPath, ts.Name.Name),
-			Kind:        kind,
-			Name:        ts.Name.Name,
-			PackageName: pkgName,
-			File:        relPath,
-			Line:        pos.Line,
-			EndLine:     endPos.Line,
-			Doc:         strings.TrimSpace(doc),
+			ID:               fmt.Sprintf("%s::%s", relPath, ts.Name.Name),
+			Kind:             kind,
+			Name:             ts.Name.Name,
+			PackageName:      pkgName,
+			File:             relPath,
+			Line:             pos.Line,
+			EndLine:          endPos.Line,
+			Doc:              strings.TrimSpace(doc),
+			InterfaceMethods: methods,
 		}
 		result.Symbols = append(result.Symbols, sym)
 	}
@@ -134,6 +147,10 @@ func extractFuncDecl(fset *token.FileSet, d *ast.FuncDecl, relPath, pkgName stri
 	}
 
 	sig := funcSignature(d)
+	methodSig := ""
+	if d.Type != nil {
+		methodSig = funcTypeSignature(d.Type)
+	}
 	id := fmt.Sprintf("%s::%s", relPath, d.Name.Name)
 	if receiver != "" {
 		id = fmt.Sprintf("%s::(%s).%s", relPath, receiver, d.Name.Name)
@@ -148,8 +165,9 @@ func extractFuncDecl(fset *token.FileSet, d *ast.FuncDecl, relPath, pkgName stri
 		File:        relPath,
 		Line:        pos.Line,
 		EndLine:     endPos.Line,
-		Doc:         strings.TrimSpace(doc),
-		Signature:   sig,
+		Doc:             strings.TrimSpace(doc),
+		Signature:       sig,
+		MethodSignature: methodSig,
 	}
 	result.Symbols = append(result.Symbols, sym)
 
@@ -248,6 +266,22 @@ func funcSignature(d *ast.FuncDecl) string {
 	if d.Type.Results != nil && len(d.Type.Results.List) > 0 {
 		sb.WriteString(" (")
 		sb.WriteString(fieldListString(d.Type.Results))
+		sb.WriteString(")")
+	}
+	return sb.String()
+}
+
+// funcTypeSignature builds just the parameter and return type signature
+func funcTypeSignature(ft *ast.FuncType) string {
+	var sb strings.Builder
+	sb.WriteString("func(")
+	if ft.Params != nil {
+		sb.WriteString(fieldListString(ft.Params))
+	}
+	sb.WriteString(")")
+	if ft.Results != nil && len(ft.Results.List) > 0 {
+		sb.WriteString(" (")
+		sb.WriteString(fieldListString(ft.Results))
 		sb.WriteString(")")
 	}
 	return sb.String()

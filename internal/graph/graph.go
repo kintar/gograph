@@ -56,16 +56,18 @@ const (
 
 // SymbolNode represents a named symbol (function, method, struct, interface).
 type SymbolNode struct {
-	ID          string     `json:"id"`
-	Kind        SymbolKind `json:"kind"`
-	Name        string     `json:"name"`
-	Receiver    string     `json:"receiver,omitempty"`
-	PackageName string     `json:"package_name"`
-	File        string     `json:"file"`
-	Line        int        `json:"line"`
-	EndLine     int        `json:"end_line"`
-	Doc         string     `json:"doc,omitempty"`
-	Signature   string     `json:"signature,omitempty"`
+	ID               string            `json:"id"`
+	Kind             SymbolKind        `json:"kind"`
+	Name             string            `json:"name"`
+	Receiver         string            `json:"receiver,omitempty"`
+	PackageName      string            `json:"package_name"`
+	File             string            `json:"file"`
+	Line             int               `json:"line"`
+	EndLine          int               `json:"end_line"`
+	Doc              string            `json:"doc,omitempty"`
+	Signature        string            `json:"signature,omitempty"`
+	MethodSignature  string            `json:"method_signature,omitempty"`
+	InterfaceMethods map[string]string `json:"interface_methods,omitempty"`
 }
 
 // CallEdge records a call expression found inside a function/method body.
