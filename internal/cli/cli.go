@@ -30,7 +30,7 @@ const errorsFile = ".gograph/graph-errors.md"
 const configFile = ".gograph/graph-config.md"
 const concFile = ".gograph/graph-concurrency.md"
 const testsFile = ".gograph/graph-tests.md"
-const Version = "1.4.3"
+const Version = "1.4.4"
 
 // Run is the entrypoint called from main.
 func Run(args []string) int {
@@ -47,10 +47,22 @@ func Run(args []string) int {
 		return runFocus(args[1:])
 	case "node":
 		return runNode(args[1:])
+	case "source":
+		return runSource(args[1:])
+	case "public":
+		return runPublic(args[1:])
+	case "fields":
+		return runFields(args[1:])
+	case "embeds":
+		return runEmbeds(args[1:])
+	case "imports":
+		return runImports(args[1:])
 	case "callers":
 		return runCallers(args[1:])
 	case "callees":
 		return runCallees(args[1:])
+	case "impact":
+		return runImpact(args[1:])
 	case "implementers":
 		return runImplementers(args[1:])
 	case "envs":
@@ -61,6 +73,12 @@ func Run(args []string) int {
 		return runConcurrency(args[1:])
 	case "tests":
 		return runTests(args[1:])
+	case "routes":
+		return runRoutes()
+	case "sql":
+		return runSQL(args[1:])
+	case "errors":
+		return runErrors(args[1:])
 	case "path":
 		return runPath(args[1:])
 	case "stale":
@@ -1088,6 +1106,199 @@ func runChanges() int {
 		case search.ChangeModified:
 			fmt.Printf("[MODIFIED] %s  (%s:%d)\n", sym.Name, sym.File, sym.Line)
 		}
+	}
+	return 0
+}
+
+// runSource extracts the raw source code of a named symbol.
+func runSource(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gograph source <name>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	root, _ := filepath.Abs(".")
+	src, err := search.Source(g, root, strings.Join(args, " "))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "source: %v\n", err)
+		return 1
+	}
+	fmt.Println(src)
+	return 0
+}
+
+// runPublic lists only the exported (public) API of a package.
+func runPublic(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gograph public <package>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.Public(g, args[0])
+	if len(results) == 0 {
+		fmt.Printf("No exported symbols found for package %q.\n", args[0])
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
+// runFields lists all fields and types of a struct.
+func runFields(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gograph fields <struct>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.Fields(g, args[0])
+	if len(results) == 0 {
+		fmt.Printf("No fields found for struct %q.\n", args[0])
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
+// runEmbeds finds which structs embed the given struct.
+func runEmbeds(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gograph embeds <struct>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.Embeds(g, args[0])
+	if len(results) == 0 {
+		fmt.Printf("No structs found embedding %q.\n", args[0])
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
+// runImports finds all files importing a given package path.
+func runImports(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gograph imports <pkg>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.ExternalImports(g, args[0])
+	if len(results) == 0 {
+		fmt.Printf("No files found importing %q.\n", args[0])
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
+// runImpact traverses the call graph backwards to find all symbols that eventually call the target.
+func runImpact(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gograph impact <symbol>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.Impact(g, strings.Join(args, " "))
+	if len(results) == 0 {
+		fmt.Printf("No callers found in blast radius of %q.\n", args[0])
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
+// runRoutes lists all HTTP REST API routes and their handler functions.
+func runRoutes() int {
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.Routes(g)
+	if len(results) == 0 {
+		fmt.Println("No HTTP routes found.")
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
+// runSQL lists raw SQL queries mapped to the functions that run them.
+func runSQL(args []string) int {
+	term := ""
+	if len(args) > 0 {
+		term = args[0]
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.SQL(g, term)
+	if len(results) == 0 {
+		fmt.Println("No SQL queries found.")
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
+// runErrors lists custom error variables and panics mapped to their source.
+func runErrors(args []string) int {
+	term := ""
+	if len(args) > 0 {
+		term = args[0]
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.Errors(g, term)
+	if len(results) == 0 {
+		fmt.Println("No custom errors or panics found.")
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
 	}
 	return 0
 }
