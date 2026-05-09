@@ -34,6 +34,8 @@ gograph fields <struct>         # extract fields and types of a struct
 gograph source <symbol>         # extract exact source code of a symbol
 gograph impact <symbol>         # find downstream callers (blast radius)
 gograph orphans                 # find dead code
+gograph routes                  # extract all HTTP REST API routes
+gograph imports <pkg>           # trace external/internal package usage
 gograph mcp <path>              # runs an MCP server over stdio
 ```
 

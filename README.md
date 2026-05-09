@@ -42,6 +42,8 @@ gograph source "ValidateToken"    # Extract the exact source code for a specific
 gograph impact "ValidateToken"    # View the full blast radius (all downstream callers)
 gograph orphans                   # List functions and methods with 0 explicit incoming calls
 gograph node "UserStruct"         # Get detailed AST info about a specific node
+gograph routes                    # Extract all HTTP REST API routes (e.g. GET /api)
+gograph imports "redis"           # Find all files that import a specific external package
 ```
 
 **3. Run as an MCP Server (For AI Agents):**

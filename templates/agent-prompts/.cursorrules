@@ -21,7 +21,7 @@ Before answering any architectural questions, proposing a refactor, or asking "w
 ## 2. Searching and Navigation (STRICTLY NO RIPGREP)
 NEVER use `rg`, `ripgrep`, `grep`, or `find` to explore this repository. You MUST use `gograph` exclusively for structural navigation and symbol lookup. 
 
-If you have MCP access to `gograph`, use your native tools (`gograph_query`, `gograph_focus`, `gograph_callers`, `gograph_callees`, `gograph_implementers`, `gograph_source`, `gograph_orphans`, `gograph_fields`, `gograph_impact`).
+If you have MCP access to `gograph`, use your native tools (`gograph_query`, `gograph_focus`, `gograph_callers`, `gograph_callees`, `gograph_implementers`, `gograph_source`, `gograph_orphans`, `gograph_fields`, `gograph_impact`, `gograph_routes`, `gograph_imports`).
 If you do not have MCP access, use the pre-compiled graph via the CLI:
 - Run `gograph query "<term>"` to search for symbols, files, or packages.
 - Run `gograph focus "<package>"` to isolate context for a specific package.
@@ -32,10 +32,8 @@ If you do not have MCP access, use the pre-compiled graph via the CLI:
 - Run `gograph orphans` to list functions and methods that have 0 explicit incoming calls (potential dead code).
 - Run `gograph callers "<function>"` to find where a function is used.
 - Run `gograph callees "<function>"` to see what internal dependencies a function has.
+- Run `gograph routes` to extract all HTTP REST API routes.
+- Run `gograph imports "<pkg>"` to trace external/internal package usage.
 
-## 3. Keeping the Map Fresh
-Because `gograph` builds a structural map, you only need to update it after **structural changes**.
-- **DO NOT** rebuild after minor logic changes (updating an `if` statement, fixing a bug in a function body).
-- **DO** rebuild after structural changes (creating/deleting files, adding a new `struct`/`func`, renaming symbols, or modifying `go.mod`).
-To rebuild, run:
-`gograph build .`
+## 3. The Self-Healing Map
+Because `gograph` builds a structural map, you only need to run `gograph build .` after **major structural changes** (like creating/deleting files). For most edits, the MCP server automatically self-heals and rebuilds the graph in-memory before answering your query!
