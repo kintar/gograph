@@ -615,3 +615,122 @@ func Public(g *graph.Graph, pkgName string) []Result {
 	sortResults(results)
 	return results
 }
+
+// Envs returns all environment variable reads in the graph,
+// optionally filtered by a keyword term.
+func Envs(g *graph.Graph, term string) []Result {
+	nl := strings.ToLower(term)
+	var results []Result
+	for _, ev := range g.EnvReads {
+		if term == "" || strings.Contains(strings.ToLower(ev.Key), nl) || strings.Contains(strings.ToLower(ev.Accessor), nl) {
+			detail := fmt.Sprintf("read via %s", ev.Accessor)
+			if ev.Function != "" {
+				detail += " in " + ev.Function
+			}
+			results = append(results, Result{
+				Kind:   "env",
+				Name:   ev.Key,
+				File:   ev.File,
+				Line:   ev.Line,
+				Detail: detail,
+				Score:  10,
+			})
+		}
+	}
+	sortResults(results)
+	return results
+}
+
+// Interfaces returns all interfaces that the named struct satisfies,
+// using duck-typing: a struct satisfies an interface if it has all methods
+// listed in InterfaceMethods (by name). Only interfaces defined in the graph
+// are checked.
+func Interfaces(g *graph.Graph, structName string) []Result {
+	// Build a map of method names owned by the struct (via method receivers).
+	structMethods := make(map[string]bool)
+	for _, s := range g.Symbols {
+		if s.Kind != graph.KindMethod {
+			continue
+		}
+		// Receiver can be "Foo" or "*Foo".
+		recv := strings.TrimPrefix(s.Receiver, "*")
+		if recv == structName {
+			structMethods[s.Name] = true
+		}
+	}
+
+	var results []Result
+	for _, iface := range g.Symbols {
+		if iface.Kind != graph.KindInterface || len(iface.InterfaceMethods) == 0 {
+			continue
+		}
+		// Check that the struct implements every method on the interface.
+		satisfied := true
+		for methodName := range iface.InterfaceMethods {
+			if !structMethods[methodName] {
+				satisfied = false
+				break
+			}
+		}
+		if satisfied {
+			results = append(results, Result{
+				Kind:   "interface",
+				Name:   iface.Name,
+				File:   iface.File,
+				Line:   iface.Line,
+				Detail: fmt.Sprintf("%s satisfies %s (%d methods)", structName, iface.Name, len(iface.InterfaceMethods)),
+				Score:  10,
+			})
+		}
+	}
+	sortResults(results)
+	return results
+}
+
+// Concurrency returns all concurrency primitives in the graph,
+// optionally filtered by a kind keyword (e.g. "goroutine", "mutex").
+func Concurrency(g *graph.Graph, term string) []Result {
+	nl := strings.ToLower(term)
+	var results []Result
+	for _, c := range g.Concurrency {
+		if term == "" || strings.Contains(strings.ToLower(c.Kind), nl) || strings.Contains(strings.ToLower(c.Function), nl) {
+			results = append(results, Result{
+				Kind:   "concurrency",
+				Name:   c.Kind,
+				File:   c.File,
+				Line:   c.Line,
+				Detail: fmt.Sprintf("%s — %s", c.Function, c.Detail),
+				Score:  10,
+			})
+		}
+	}
+	sortResults(results)
+	return results
+}
+
+// Tests returns all test functions that exercise the named symbol.
+// Pass an empty term to list all test edges.
+func Tests(g *graph.Graph, term string) []Result {
+	nl := strings.ToLower(term)
+	var results []Result
+	seen := make(map[string]bool)
+	for _, te := range g.TestEdges {
+		if term == "" || strings.Contains(strings.ToLower(te.Target), nl) || strings.Contains(strings.ToLower(te.TestFunc), nl) {
+			key := fmt.Sprintf("%s|%s", te.TestFunc, te.Target)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			results = append(results, Result{
+				Kind:   "test",
+				Name:   te.TestFunc,
+				File:   te.File,
+				Line:   te.Line,
+				Detail: fmt.Sprintf("exercises %s", te.Target),
+				Score:  10,
+			})
+		}
+	}
+	sortResults(results)
+	return results
+}

@@ -8,20 +8,22 @@ const Version = "1"
 
 // Graph is the top-level data structure written to .gograph/graph.json.
 type Graph struct {
-	Version      string        `json:"version"`
-	GeneratedAt  time.Time     `json:"generated_at"`
-	Root         string        `json:"root"`
-	Packages     []PackageNode `json:"packages"`
-	Files        []FileNode    `json:"files"`
-	Symbols      []SymbolNode  `json:"symbols"`
-	Imports      []ImportEdge  `json:"imports"`
-	Calls        []CallEdge    `json:"calls"`
-	EnvReads     []EnvRead     `json:"env_reads"`
-	Dependencies []Dependency  `json:"dependencies"`
-	Routes       []HTTPRoute   `json:"routes,omitempty"`
-	ImportEdges  []ImportEdge  `json:"import_edges,omitempty"`
-	SQLs         []SQLEdge     `json:"sqls,omitempty"`
-	Errors       []ErrorEdge   `json:"errors,omitempty"`
+	Version       string           `json:"version"`
+	GeneratedAt   time.Time        `json:"generated_at"`
+	Root          string           `json:"root"`
+	Packages      []PackageNode    `json:"packages"`
+	Files         []FileNode       `json:"files"`
+	Symbols       []SymbolNode     `json:"symbols"`
+	Imports       []ImportEdge     `json:"imports"`
+	Calls         []CallEdge       `json:"calls"`
+	EnvReads      []EnvRead        `json:"env_reads"`
+	Dependencies  []Dependency     `json:"dependencies"`
+	Routes        []HTTPRoute      `json:"routes,omitempty"`
+	ImportEdges   []ImportEdge     `json:"import_edges,omitempty"`
+	SQLs          []SQLEdge        `json:"sqls,omitempty"`
+	Errors        []ErrorEdge      `json:"errors,omitempty"`
+	Concurrency   []ConcurrencyNode `json:"concurrency,omitempty"`
+	TestEdges     []TestEdge       `json:"test_edges,omitempty"`
 }
 
 // SQLEdge represents an extracted SQL query.
@@ -36,6 +38,26 @@ type SQLEdge struct {
 type ErrorEdge struct {
 	Message  string `json:"message"`
 	Function string `json:"function"`
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+}
+
+// ConcurrencyNode represents a concurrency primitive found in code.
+// Kind is one of: "goroutine", "channel_send", "channel_recv", "mutex_lock",
+// "mutex_unlock", "rwmutex_lock", "rwmutex_unlock", "waitgroup_add",
+// "waitgroup_wait", "once_do".
+type ConcurrencyNode struct {
+	Kind     string `json:"kind"`
+	Function string `json:"function"`
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+	Detail   string `json:"detail,omitempty"`
+}
+
+// TestEdge links a *testing.T test function to the symbols it exercises.
+type TestEdge struct {
+	TestFunc string `json:"test_func"`
+	Target   string `json:"target"`   // callee name that looks like a production symbol
 	File     string `json:"file"`
 	Line     int    `json:"line"`
 }
@@ -133,3 +155,4 @@ type EnvRead struct {
 	Line     int    `json:"line"`
 	Function string `json:"function,omitempty"`
 }
+

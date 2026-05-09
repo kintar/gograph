@@ -45,6 +45,14 @@ func Run(args []string) int {
 		return runCallees(args[1:])
 	case "implementers":
 		return runImplementers(args[1:])
+	case "envs":
+		return runEnvs(args[1:])
+	case "interfaces":
+		return runInterfaces(args[1:])
+	case "concurrency":
+		return runConcurrency(args[1:])
+	case "tests":
+		return runTests(args[1:])
 	case "mcp":
 		return runMCP(args[1:])
 	case "help", "--help", "-h":
@@ -145,6 +153,11 @@ func BuildGraph(absRoot string) (*graph.Graph, error) {
 		g.Imports = append(g.Imports, result.Imports...)
 		g.Calls = append(g.Calls, result.Calls...)
 		g.EnvReads = append(g.EnvReads, result.Env...)
+		g.Routes = append(g.Routes, result.Routes...)
+		g.SQLs = append(g.SQLs, result.SQLs...)
+		g.Errors = append(g.Errors, result.Errors...)
+		g.Concurrency = append(g.Concurrency, result.Concurrency...)
+		g.TestEdges = append(g.TestEdges, result.TestEdges...)
 
 		dir := filepath.Dir(rel)
 		if _, ok := pkgMap[dir]; !ok {
@@ -289,6 +302,94 @@ func runImplementers(args []string) int {
 	results := search.Implementers(g, args[0])
 	if len(results) == 0 {
 		fmt.Printf("No structs found implementing '%s'.\n", args[0])
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
+func runEnvs(args []string) int {
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load graph: %v\n", err)
+		return 1
+	}
+	term := ""
+	if len(args) > 0 {
+		term = args[0]
+	}
+	results := search.Envs(g, term)
+	if len(results) == 0 {
+		fmt.Println("No environment variable reads found.")
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
+func runInterfaces(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: gograph interfaces <struct>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load graph: %v\n", err)
+		return 1
+	}
+	results := search.Interfaces(g, args[0])
+	if len(results) == 0 {
+		fmt.Printf("No interfaces found satisfied by '%s'.\n", args[0])
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
+func runConcurrency(args []string) int {
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load graph: %v\n", err)
+		return 1
+	}
+	term := ""
+	if len(args) > 0 {
+		term = args[0]
+	}
+	results := search.Concurrency(g, term)
+	if len(results) == 0 {
+		fmt.Println("No concurrency primitives found.")
+		return 0
+	}
+	for _, r := range results {
+		fmt.Println(r.String())
+	}
+	return 0
+}
+
+func runTests(args []string) int {
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load graph: %v\n", err)
+		return 1
+	}
+	term := ""
+	if len(args) > 0 {
+		term = args[0]
+	}
+	results := search.Tests(g, term)
+	if len(results) == 0 {
+		if term != "" {
+			fmt.Printf("No test functions found exercising '%s'.\n", term)
+		} else {
+			fmt.Println("No test edges found.")
+		}
 		return 0
 	}
 	for _, r := range results {

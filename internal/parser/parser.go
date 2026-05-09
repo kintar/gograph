@@ -15,14 +15,16 @@ import (
 
 // FileResult holds everything extracted from one source file.
 type FileResult struct {
-	File    graph.FileNode
-	Symbols []graph.SymbolNode
-	Imports []graph.ImportEdge
-	Calls   []graph.CallEdge
-	Env     []graph.EnvRead
-	Routes  []graph.HTTPRoute
-	SQLs    []graph.SQLEdge
-	Errors  []graph.ErrorEdge
+	File        graph.FileNode
+	Symbols     []graph.SymbolNode
+	Imports     []graph.ImportEdge
+	Calls       []graph.CallEdge
+	Env         []graph.EnvRead
+	Routes      []graph.HTTPRoute
+	SQLs        []graph.SQLEdge
+	Errors      []graph.ErrorEdge
+	Concurrency []graph.ConcurrencyNode
+	TestEdges   []graph.TestEdge
 }
 
 // ParseFile parses a single .go file and extracts its nodes.
@@ -229,12 +231,38 @@ func extractFuncDecl(fset *token.FileSet, d *ast.FuncDecl, relPath, pkgName stri
 	}
 	result.Symbols = append(result.Symbols, sym)
 
-	// Extract call edges and env reads from the body.
+	// Extract call edges, env reads, concurrency, and test edges from the body.
 	if d.Body != nil {
 		callerName := d.Name.Name
 		if receiver != "" {
 			callerName = fmt.Sprintf("(%s).%s", receiver, d.Name.Name)
 		}
+		isTestFunc := strings.HasPrefix(d.Name.Name, "Test") || strings.HasPrefix(d.Name.Name, "Benchmark")
+
+		// Concurrency: inspect go statements and channel sends/receives.
+		ast.Inspect(d.Body, func(n ast.Node) bool {
+			switch stmt := n.(type) {
+			case *ast.GoStmt:
+				detail := calleeString(stmt.Call)
+				result.Concurrency = append(result.Concurrency, graph.ConcurrencyNode{
+					Kind:     "goroutine",
+					Function: callerName,
+					File:     relPath,
+					Line:     fset.Position(stmt.Pos()).Line,
+					Detail:   "go " + detail,
+				})
+			case *ast.SendStmt:
+				result.Concurrency = append(result.Concurrency, graph.ConcurrencyNode{
+					Kind:     "channel_send",
+					Function: callerName,
+					File:     relPath,
+					Line:     fset.Position(stmt.Pos()).Line,
+					Detail:   exprName(stmt.Chan) + " <-",
+				})
+			}
+			return true
+		})
+
 		ast.Inspect(d.Body, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
 			if !ok {
@@ -242,6 +270,67 @@ func extractFuncDecl(fset *token.FileSet, d *ast.FuncDecl, relPath, pkgName stri
 			}
 			callPos := fset.Position(call.Pos())
 			callee := calleeString(call)
+
+			// Sync primitive detection using suffix matching so "w.mu.Lock",
+			// "s.mu.Lock", etc. are all caught regardless of receiver variable name.
+			switch {
+			case strings.HasSuffix(callee, ".Lock") && !strings.HasSuffix(callee, ".RLock"):
+				result.Concurrency = append(result.Concurrency, graph.ConcurrencyNode{
+					Kind:     "mutex_lock",
+					Function: callerName,
+					File:     relPath,
+					Line:     callPos.Line,
+					Detail:   callee,
+				})
+			case strings.HasSuffix(callee, ".RLock"):
+				result.Concurrency = append(result.Concurrency, graph.ConcurrencyNode{
+					Kind:     "mutex_lock",
+					Function: callerName,
+					File:     relPath,
+					Line:     callPos.Line,
+					Detail:   callee,
+				})
+			case strings.HasSuffix(callee, ".Unlock") && !strings.HasSuffix(callee, ".RUnlock"):
+				result.Concurrency = append(result.Concurrency, graph.ConcurrencyNode{
+					Kind:     "mutex_unlock",
+					Function: callerName,
+					File:     relPath,
+					Line:     callPos.Line,
+					Detail:   callee,
+				})
+			case strings.HasSuffix(callee, ".RUnlock"):
+				result.Concurrency = append(result.Concurrency, graph.ConcurrencyNode{
+					Kind:     "mutex_unlock",
+					Function: callerName,
+					File:     relPath,
+					Line:     callPos.Line,
+					Detail:   callee,
+				})
+			case strings.HasSuffix(callee, ".Add"):
+				result.Concurrency = append(result.Concurrency, graph.ConcurrencyNode{
+					Kind:     "waitgroup_add",
+					Function: callerName,
+					File:     relPath,
+					Line:     callPos.Line,
+					Detail:   callee,
+				})
+			case strings.HasSuffix(callee, ".Wait"):
+				result.Concurrency = append(result.Concurrency, graph.ConcurrencyNode{
+					Kind:     "waitgroup_wait",
+					Function: callerName,
+					File:     relPath,
+					Line:     callPos.Line,
+					Detail:   callee,
+				})
+			case strings.HasSuffix(callee, ".Do"):
+				result.Concurrency = append(result.Concurrency, graph.ConcurrencyNode{
+					Kind:     "once_do",
+					Function: callerName,
+					File:     relPath,
+					Line:     callPos.Line,
+					Detail:   callee,
+				})
+			}
 
 			// Env-var detection.
 			if ev, ok := envRead(call, callee, callPos.Line, relPath, callerName); ok {
@@ -278,6 +367,16 @@ func extractFuncDecl(fset *token.FileSet, d *ast.FuncDecl, relPath, pkgName stri
 						break
 					}
 				}
+			}
+
+			// Test edge: record which production symbols a test calls.
+			if isTestFunc && callee != "" && !strings.HasPrefix(callee, "t.") && !strings.HasPrefix(callee, "b.") {
+				result.TestEdges = append(result.TestEdges, graph.TestEdge{
+					TestFunc: d.Name.Name,
+					Target:   callee,
+					File:     relPath,
+					Line:     callPos.Line,
+				})
 			}
 
 			result.Calls = append(result.Calls, graph.CallEdge{
