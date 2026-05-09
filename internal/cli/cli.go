@@ -73,6 +73,14 @@ func Run(args []string) int {
 		return runComplexity(args[1:])
 	case "coupling":
 		return runCoupling(args[1:])
+	case "context":
+		return runContext(args[1:])
+	case "hotspot":
+		return runHotspot(args[1:])
+	case "deps":
+		return runDeps(args[1:])
+	case "changes":
+		return runChanges()
 	case "capabilities":
 		return runCapabilities()
 	case "mcp":
@@ -125,6 +133,10 @@ orphans              : reachability-based dead code analysis
 godobj               : find god-object struct candidates (--methods N --fields N --calls N --top N)
 complexity [sym]     : cyclomatic complexity estimate per function (highest first)
 coupling [pkg]       : fan-in, fan-out, and instability per package
+context <sym>        : bundle node+source+callers+callees+tests (saves 4-5 tool calls)
+hotspot [--top N]    : rank functions by incoming calls (study these first)
+deps <pkg> [--transitive] : import dependency tree of a package
+changes              : symbols modified/new/deleted since last build
 imports <pkg>        : trace external/internal usage`)
 	return 0
 }
@@ -682,6 +694,16 @@ CODE QUALITY
                              HIGH / VERY HIGH (McCabe thresholds: 5 / 10 / 20).
   coupling [package]         Fan-in, fan-out, and instability per package.
                              Instability = FanOut / (FanIn + FanOut). Range [0,1].
+  context <symbol>           Bundle node+source+callers+callees+tests in one call.
+                             Replaces 4–5 separate commands. Primary token saver.
+  hotspot [--top N]          Rank functions by incoming call count (fan-in).
+                             Shows the most-depended-on code to study first.
+                             Default: --top 10
+  deps <pkg> [--transitive]  Direct import dependencies of a package.
+                             Add --transitive for the full closure (BFS).
+  changes                    Symbols modified/added/deleted since last 'build'.
+                             Surfaces new functions, deleted files, and modified
+                             symbols without re-reading changed source files.
   godobj [flags]             God-object struct candidates scored by method count,
                              field count, and outgoing calls.
                              Flags: --methods N  --fields N  --calls N  --top N
@@ -888,6 +910,184 @@ func runCoupling(args []string) int {
 			instStr = "n/a"
 		}
 		fmt.Printf("%-55s  %6d  %6d  %s\n", r.Package, r.FanOut, r.FanIn, instStr)
+	}
+	return 0
+}
+
+// runContext bundles node+source+callers+callees+tests for a symbol in one call.
+func runContext(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gograph context <symbol>")
+		return 1
+	}
+	term := strings.Join(args, " ")
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	root, _ := filepath.Abs(".")
+	result := search.Context(g, root, term)
+	if result == nil {
+		fmt.Printf("No symbol found matching %q.\n", term)
+		return 0
+	}
+
+	fmt.Printf("=== CONTEXT: %s ===\n\n", term)
+
+	if len(result.Node) > 0 {
+		fmt.Println("--- NODE ---")
+		for _, r := range result.Node {
+			fmt.Println(r.String())
+		}
+		fmt.Println()
+	}
+
+	if result.Source != "" {
+		fmt.Println("--- SOURCE ---")
+		fmt.Println(result.Source)
+	} else if result.SourceErr != nil {
+		fmt.Printf("(source unavailable: %v)\n\n", result.SourceErr)
+	}
+
+	if len(result.Callers) > 0 {
+		fmt.Printf("--- CALLERS (%d) ---\n", len(result.Callers))
+		for _, r := range result.Callers {
+			fmt.Println(r.String())
+		}
+		fmt.Println()
+	}
+
+	if len(result.Callees) > 0 {
+		fmt.Printf("--- CALLEES (%d) ---\n", len(result.Callees))
+		for _, r := range result.Callees {
+			fmt.Println(r.String())
+		}
+		fmt.Println()
+	}
+
+	if len(result.Tests) > 0 {
+		fmt.Printf("--- TESTS (%d) ---\n", len(result.Tests))
+		for _, r := range result.Tests {
+			fmt.Println(r.String())
+		}
+		fmt.Println()
+	}
+	return 0
+}
+
+// runHotspot ranks functions by incoming call count.
+func runHotspot(args []string) int {
+	top := 10
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "--top" {
+			if _, err := fmt.Sscanf(args[i+1], "%d", &top); err != nil {
+				fmt.Fprintf(os.Stderr, "invalid --top value: %q\n", args[i+1])
+				return 1
+			}
+			i++
+		}
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.Hotspot(g, top)
+	if len(results) == 0 {
+		fmt.Println("No hotspot data found (no call edges in graph).")
+		return 0
+	}
+	label := fmt.Sprintf("top %d", top)
+	if top == 0 {
+		label = "all"
+	}
+	fmt.Printf("Hotspot Functions (%s, sorted by incoming calls):\n\n", label)
+	for i, r := range results {
+		fmt.Printf("%3d.  %-6d calls  %s  (%s:%d)\n", i+1, r.IncomingCalls, r.Name, r.File, r.Line)
+	}
+	return 0
+}
+
+// runDeps shows direct (and optionally transitive) imports for a package.
+func runDeps(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gograph deps <package> [--transitive]")
+		return 1
+	}
+	pkg := args[0]
+	transitive := false
+	for _, a := range args[1:] {
+		if a == "--transitive" {
+			transitive = true
+		}
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	result := search.Deps(g, pkg, transitive)
+	if result == nil {
+		fmt.Printf("No package found matching %q.\n", pkg)
+		return 0
+	}
+	fmt.Printf("Package: %s\n\nDirect imports (%d):\n", result.Package, len(result.Direct))
+	for _, imp := range result.Direct {
+		fmt.Printf("  %s\n", imp)
+	}
+	if transitive {
+		fmt.Printf("\nTransitive imports (%d):\n", len(result.Transitive))
+		for _, imp := range result.Transitive {
+			fmt.Printf("  %s\n", imp)
+		}
+	}
+	return 0
+}
+
+// runChanges reports symbols modified/added/deleted since the last build.
+func runChanges() int {
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	root, _ := filepath.Abs(".")
+	result := search.Changes(g, root)
+
+	if len(result.ChangedFiles) == 0 && len(result.Symbols) == 0 {
+		fmt.Printf("No changes detected (graph generated: %s).\n",
+			result.GraphAge.Format("2006-01-02 15:04:05 UTC"))
+		return 0
+	}
+
+	fmt.Printf("Changes since graph build (%s):\n\n",
+		result.GraphAge.Format("2006-01-02 15:04:05 UTC"))
+
+	if len(result.ChangedFiles) > 0 {
+		fmt.Printf("Modified files (%d):\n", len(result.ChangedFiles))
+		for _, f := range result.ChangedFiles {
+			fmt.Printf("  %s\n", f)
+		}
+		fmt.Println()
+	}
+
+	counts := map[search.ChangeStatus]int{}
+	for _, s := range result.Symbols {
+		counts[s.Status]++
+	}
+	fmt.Printf("Affected symbols: %d modified, %d new, %d deleted\n\n",
+		counts[search.ChangeModified], counts[search.ChangeNew], counts[search.ChangeDeleted])
+
+	for _, sym := range result.Symbols {
+		switch sym.Status {
+		case search.ChangeNew:
+			fmt.Printf("[NEW     ] %s  (%s:%d)\n", sym.Name, sym.File, sym.Line)
+		case search.ChangeDeleted:
+			fmt.Printf("[DELETED ] %s  (%s)\n", sym.Name, sym.File)
+		case search.ChangeModified:
+			fmt.Printf("[MODIFIED] %s  (%s:%d)\n", sym.Name, sym.File, sym.Line)
+		}
 	}
 	return 0
 }

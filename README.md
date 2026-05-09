@@ -13,12 +13,19 @@ It is a **companion tool to pair with AI coding agents** like Claude Code, OpenC
 - **Local Only:** No network calls or external API dependencies. All analysis is done securely on your machine.
 - **Go Focused:** Maps Go project structures, packages, and dependencies using the standard AST.
 - **Targeted Focus:** Extract incredibly targeted context for a single package using `focus` to save LLM tokens.
+- **Token-Saving Context Bundle:** `context <symbol>` replaces 4–5 separate tool calls — returns node, source, callers, callees, and tests in one response.
+- **Hotspot Ranking:** `hotspot` ranks functions by incoming call count so agents know which functions to study first.
+- **Code Quality Analysis:** Cyclomatic complexity (`complexity`), god-object detection (`godobj`), and package coupling/instability (`coupling`).
+- **Change Detection:** `changes` surfaces new/modified/deleted symbols since the last build without re-reading source files.
+- **Dependency Trees:** `deps <pkg> [--transitive]` shows direct or full transitive import closures for any package.
 - **Tech Stack Extraction:** Automatically parses `go.mod` to summarize your external dependencies (like `gin` or `pgx`) so agents instantly understand your stack.
 - **Concurrency Mapping:** Detects goroutine spawns, channel sends, mutex locks, WaitGroup usage, and `sync.Once.Do` calls across the entire codebase.
 - **Interface Satisfaction:** Best-effort duck-typing analysis that tells you which interfaces any struct satisfies — without running the compiler.
 - **Test Coverage Map:** Best-effort mapping that links `Test*` functions to the production symbols they likely exercise.
 - **Environment Config:** Surfaces every `os.Getenv` / `viper.Get*` read with file, line, and enclosing function.
-- **Clean Graph (No Generated Files):** Uses strict line-based detection (checking the first 10 lines of every `.go` file for "Code generated") to automatically exclude generated files like mocks or protobufs, ensuring your AI map remains unpolluted.
+- **Pathfinding:** `path <from> <to>` finds the shortest call chain between any two symbols via BFS.
+- **Dead Code Detection:** `orphans` uses full reachability analysis from entry points — stricter than simple 0-call-count checks.
+- **Clean Graph (No Generated Files):** Uses strict line-based detection to automatically exclude generated files like mocks or protobufs.
 - **Fast:** Written in Go for high performance.
 
 ## Installation
@@ -66,6 +73,13 @@ gograph complexity                # Cyclomatic complexity for all functions (hig
 gograph complexity "Run"          # Complexity for a specific function
 gograph coupling                  # Package fan-in, fan-out, instability table
 gograph coupling "internal/auth" # Filter to a specific package
+# --- TOKEN SAVERS ---
+gograph context "ValidateToken"   # Node + source + callers + callees + tests in ONE call
+gograph hotspot                   # Top 10 most-called functions (where to focus first)
+gograph hotspot --top 20          # Expand to top 20
+gograph deps "internal/auth"      # Direct import dependencies of a package
+gograph deps "internal/auth" --transitive  # Full transitive closure
+gograph changes                   # New/modified/deleted symbols since last build
 ```
 
 **3. Run as an MCP Server (For AI Agents):**

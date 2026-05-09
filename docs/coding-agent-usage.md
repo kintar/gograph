@@ -53,6 +53,13 @@ gograph complexity              # cyclomatic complexity for all functions, highe
 gograph complexity "Run"        # complexity for a specific function by name
 gograph coupling                # package fan-in, fan-out, and instability table
 gograph coupling "internal/auth" # filter to a specific package
+# --- PRIMARY TOKEN SAVERS ---
+gograph context "ValidateToken"  # node + source + callers + callees + tests in ONE call
+gograph hotspot                  # top 10 most-called functions (focus study here first)
+gograph hotspot --top 20         # expand the hotspot window
+gograph deps "internal/auth"     # direct import dependencies of a package
+gograph deps "internal/auth" --transitive  # full transitive import closure
+gograph changes                  # new/modified/deleted symbols since last build
 gograph capabilities            # print token-optimized AI agent cheat sheet
 gograph mcp <path>              # runs an MCP server over stdio
 ```
@@ -157,7 +164,104 @@ search                                                        9       0  1.00
 graph                                                         3       8  0.27
 ```
 
-### 14. Native Execution via MCP
+### 15. Symbol context bundle (primary token saver)
+`gograph context <symbol>` is the single highest-impact token-saving command. It bundles the following into one response:
+- **Node** — kind, file, line, signature, doc string
+- **Source** — the raw function body extracted from the source file
+- **Callers** — every function that calls this symbol
+- **Callees** — every function this symbol calls
+- **Tests** — test functions that exercise this symbol
+
+Without this command, an agent needs 4–5 separate tool calls to gather the same information.
+
+Example:
+```
+gograph context "ValidateToken"
+```
+```
+=== CONTEXT: ValidateToken ===
+
+--- NODE ---
+[function] ValidateToken — func ValidateToken(token string) (bool, error)  (internal/auth/validator.go:42)
+
+--- SOURCE ---
+// internal/auth/validator.go::ValidateToken (internal/auth/validator.go:42-67)
+func ValidateToken(token string) (bool, error) { ... }
+
+--- CALLERS (3) ---
+[caller] HandleLogin — calls ValidateToken  (internal/api/handler.go:88)
+...
+
+--- CALLEES (5) ---
+[callee] jwt.Parse — called by ValidateToken  (internal/auth/validator.go:45)
+...
+
+--- TESTS (2) ---
+[test] TestValidateToken  (internal/auth/validator_test.go:12)
+```
+
+### 16. Hotspot ranking
+`gograph hotspot [--top N]` ranks all functions by how many call sites depend on them (fan-in). The top hotspots are the most load-bearing code in the codebase — the functions an agent must understand before making any structural change.
+
+```
+gograph hotspot --top 5
+```
+```
+Hotspot Functions (top 5, sorted by incoming calls):
+
+  1.  42     calls  loadGraph  (internal/cli/cli.go:220)
+  2.  38     calls  sortResults  (internal/search/search.go:198)
+  3.  28     calls  formatResults  (internal/mcp/server.go:322)
+```
+An agent onboarding to a new repo should always run `hotspot` before reading any files, to know where to focus.
+
+### 17. Dependency trees
+`gograph deps <package>` shows the direct import dependencies of a package. Adding `--transitive` expands this to the full import closure via BFS.
+
+```
+gograph deps "internal/cli"
+gograph deps "internal/cli" --transitive
+```
+Output:
+```
+Package: cli
+
+Direct imports (14):
+  encoding/json
+  github.com/ozgurcd/gograph/internal/graph
+  ...
+
+Transitive imports (24):
+  ...
+```
+This tells an agent exactly which packages will be affected if `cli` changes, without requiring it to follow import chains manually.
+
+### 18. Change detection
+`gograph changes` compares every source file's modification time against `graph.json`'s `generated_at` timestamp and reports:
+- **MODIFIED** — symbols in files that changed since the last build
+- **NEW** — top-level declarations in changed files not recorded in the graph
+- **DELETED** — symbols whose source files no longer exist
+
+This allows an agent in an iterative session to see exactly what changed without re-reading files or re-running `gograph build`.
+
+```
+gograph changes
+```
+```
+Changes since graph build (2026-05-09 14:00:00 UTC):
+
+Modified files (2):
+  internal/auth/validator.go
+  internal/api/handler.go
+
+Affected symbols: 3 modified, 1 new, 0 deleted
+
+[NEW     ] RefreshToken  (internal/auth/validator.go:71)
+[MODIFIED] ValidateToken  (internal/auth/validator.go:42)
+[MODIFIED] HandleLogin  (internal/api/handler.go:88)
+```
+
+### 19. Native Execution via MCP
 Agents that support the Model Context Protocol (like Claude Desktop, Cursor, and Antigravity) can run `gograph` as a native MCP server:
 ```json
 {
