@@ -13,6 +13,8 @@ Do not use `grep` or `find` to locate symbols. Use the pre-compiled graph via th
 - Run `gograph callees "<function>"` to see what internal dependencies a function has.
 
 ## 3. Keeping the Map Fresh
-Whenever you create a new file, rename a symbol, change a method signature, or modify `go.mod`, you MUST run:
+Because `gograph` builds a structural map, you only need to update it after **structural changes**.
+- **DO NOT** rebuild after minor logic changes (updating an `if` statement, fixing a bug in a function body).
+- **DO** rebuild after structural changes (creating/deleting files, adding a new `struct`/`func`, renaming symbols, or modifying `go.mod`).
+To rebuild, run:
 `go build -o bin/gograph ./cmd/gograph && ./bin/gograph build .`
-This ensures `.gograph/graph.json` and `.gograph/GRAPH_REPORT.md` stay perfectly in sync with reality.
