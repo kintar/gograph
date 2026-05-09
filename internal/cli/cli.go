@@ -22,7 +22,7 @@ import (
 const outputDir = ".gograph"
 const graphFile = ".gograph/graph.json"
 const reportFile = ".gograph/GRAPH_REPORT.md"
-const Version = "1.1.4"
+const Version = "1.1.5"
 
 // Run is the entrypoint called from main.
 func Run(args []string) int {
