@@ -1,18 +1,24 @@
-BINARY=gograph
-BUILD_DIR=bin
-CMD=./cmd/gograph
+BINARY    = gograph
+BUILD_DIR = bin
+CMD       = ./cmd/gograph
+INSTALL   = /usr/local/bin
 
 .PHONY: build test run-build clean bump-patch bump-minor bump-major install
 
+# Read the current version from .bumpversion.cfg after bumping.
+# grep picks the 'current_version = x.y.z' line; awk extracts the last field.
 build: bump-patch
+	$(eval VERSION := $(shell grep '^current_version' .bumpversion.cfg | awk '{print $$3}'))
 	@mkdir -p $(BUILD_DIR)
-	go build -o $(BUILD_DIR)/$(BINARY) $(CMD)
-	@echo "Built $(BUILD_DIR)/$(BINARY)"
+	go build -ldflags "-X main.version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY) $(CMD)
+	@echo "Built $(BUILD_DIR)/$(BINARY) v$(VERSION)"
 
-install: build
-	sudo rm -f /usr/local/bin/$(BINARY)
-	sudo cp $(BUILD_DIR)/$(BINARY) /usr/local/bin/
-	@echo "Installed $(BINARY) to /usr/local/bin/"
+# install only copies whatever is already in bin/ — no implicit build.
+install:
+	@test -f $(BUILD_DIR)/$(BINARY) || (echo "Run 'make build' first — $(BUILD_DIR)/$(BINARY) not found." && exit 1)
+	sudo rm -f $(INSTALL)/$(BINARY)
+	sudo cp $(BUILD_DIR)/$(BINARY) $(INSTALL)/
+	@echo "Installed $(BINARY) to $(INSTALL)/"
 
 test:
 	go test ./...

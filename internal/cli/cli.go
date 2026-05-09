@@ -30,7 +30,8 @@ const errorsFile = ".gograph/graph-errors.md"
 const configFile = ".gograph/graph-config.md"
 const concFile = ".gograph/graph-concurrency.md"
 const testsFile = ".gograph/graph-tests.md"
-const Version = "1.4.5"
+// Version is set at build time via -ldflags; defaults to "dev" for local builds.
+var Version = "dev"
 
 // Run is the entrypoint called from main.
 func Run(args []string) int {
