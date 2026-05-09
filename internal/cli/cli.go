@@ -82,7 +82,7 @@ func runCapabilities() int {
 	fmt.Println(`gograph: AST-aware Repository Navigation Tool for AI Agents
 
 INSTRUCTIONS FOR AI AGENTS:
-Do NOT use ripgrep, grep, or find to explore this repository. 
+Use gograph first for repo navigation; use grep/raw reads only when the graph lacks detail or exact source is needed.
 Use gograph to understand repository structure, dependencies, and call graphs.
 To save tokens, the graph is split into targeted files in .gograph/. 
 Read .gograph/GRAPH_REPORT.md first.

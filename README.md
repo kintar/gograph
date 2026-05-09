@@ -18,6 +18,7 @@ It is the **ideal companion tool to pair with AI coding agents** like Claude Cod
 - **Interface Satisfaction:** Duck-typing analysis that tells you which interfaces any struct satisfies — without running the compiler.
 - **Test Coverage Map:** Links every `Test*` function to the production symbols it exercises — instantly see what's tested.
 - **Environment Config:** Surfaces every `os.Getenv` / `viper.Get*` read with file, line, and enclosing function.
+- **Clean Graph (No Generated Files):** Uses strict line-based detection (checking the first 10 lines of every `.go` file for "Code generated") to automatically exclude generated files like mocks or protobufs, ensuring your AI map remains unpolluted.
 - **Fast:** Written in Go for high performance.
 
 ## Installation

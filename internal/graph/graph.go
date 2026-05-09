@@ -19,7 +19,6 @@ type Graph struct {
 	EnvReads      []EnvRead        `json:"env_reads"`
 	Dependencies  []Dependency     `json:"dependencies"`
 	Routes        []HTTPRoute      `json:"routes,omitempty"`
-	ImportEdges   []ImportEdge     `json:"import_edges,omitempty"`
 	SQLs          []SQLEdge        `json:"sqls,omitempty"`
 	Errors        []ErrorEdge      `json:"errors,omitempty"`
 	Concurrency   []ConcurrencyNode `json:"concurrency,omitempty"`
