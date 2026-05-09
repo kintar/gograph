@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ozgurcd/gograph/internal/graph"
+	"github.com/ozgurcd/gograph/internal/mcp"
 	"github.com/ozgurcd/gograph/internal/parser"
 	"github.com/ozgurcd/gograph/internal/report"
 	"github.com/ozgurcd/gograph/internal/scanner"
@@ -41,6 +42,8 @@ func Run(args []string) int {
 		return runCallers(args[1:])
 	case "callees":
 		return runCallees(args[1:])
+	case "mcp":
+		return runMCP(args[1:])
 	case "help", "--help", "-h":
 		printHelp()
 		return 0
@@ -258,6 +261,23 @@ func runCallees(args []string) int {
 	return 0
 }
 
+func runMCP(args []string) int {
+	root := "."
+	if len(args) > 0 {
+		root = args[0]
+	}
+	g, err := loadGraph(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load graph for MCP server: %v\n", err)
+		return 1
+	}
+	if err := mcp.Serve(g); err != nil {
+		fmt.Fprintf(os.Stderr, "MCP server error: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
 func loadGraph(root string) (*graph.Graph, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
@@ -406,6 +426,7 @@ Commands:
   node <name>          Show details for a symbol/package/file.
   callers <name>       Show functions that call the given function/method.
   callees <name>       Show calls made inside the given function/method.
+  mcp [path]           Start an MCP server over stdio for AI integration.
   help                 Show this help.
 
 Outputs:

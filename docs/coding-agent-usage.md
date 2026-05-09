@@ -26,9 +26,10 @@ And four query commands the agent can invoke without re-parsing:
 
 ```sh
 gograph query <term>            # symbol/package/file/import/call substring search
-gograph node <name>             # details for one symbol
+gograph focus <package>         # isolate context for a specific package
 gograph callers <function>      # who calls it (best-effort, AST text-form)
 gograph callees <function>      # what it calls
+gograph mcp <path>              # runs an MCP server over stdio
 ```
 
 ## Concrete agent workflows
@@ -47,6 +48,20 @@ The "Environment Variables" section lists every `os.Getenv` / `os.LookupEnv` / `
 
 ### 5. Keeping the map fresh
 After structural edits (new files, renamed symbols, new packages), the agent re-runs `gograph build .` so its repo map matches the current code. Cheap: parsing-only, no network, no compilation.
+
+### 6. Native Execution via MCP
+Agents that support the Model Context Protocol (like Claude Desktop, Cursor, and Antigravity) can run `gograph` as a native MCP server:
+```json
+{
+  "mcpServers": {
+    "gograph": {
+      "command": "gograph",
+      "args": ["mcp", "/path/to/repo"]
+    }
+  }
+}
+```
+This exposes `gograph_query`, `gograph_focus`, `gograph_callers`, and `gograph_callees` directly to the agent as executable tools, bypassing the need for terminal commands.
 
 ## Recommended project setup
 
@@ -79,7 +94,7 @@ After structural edits (new files, renamed symbols, new packages), the agent re-
 
 `gograph` is intentionally narrow — important for any tool a coding agent will run autonomously:
 
-- **No network** — no API calls, no telemetry, no MCP, no embeddings service.
+- **No network** — no API calls, no telemetry, no embeddings service. The built-in MCP server runs entirely over local standard input/output (`stdio`), so no network ports are ever opened.
 - **No code execution** — purely static AST parsing. Never runs `go test`, `go build`, `go list`, or any code from the target repo.
 - **No secret-bearing files** — only `.go` files are opened. `.env`, `*.key`, `*.pem`, `*.crt`, kubeconfig, tfstate, etc. are never read.
 - **No file contents in output** — the graph stores structural metadata (names, kinds, line numbers, edges), not source bodies.

@@ -39,6 +39,13 @@ gograph callees "InitServer"      # See exactly what InitServer calls
 gograph node "UserStruct"         # Get detailed AST info about a specific node
 ```
 
+**3. Run as an MCP Server (For AI Agents):**
+If you want to give your AI agent native tool execution capabilities, `gograph` has a built-in [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server.
+```bash
+gograph mcp .
+```
+You can add this to your AI client's configuration (like Claude Desktop or VS Code extensions like Cline) so the AI can run these graph queries autonomously!
+
 ## 🤖 Integrating with AI Agents (Cursor, Claude Code, Copilot)
 
 To get the absolute best results from your AI coding assistant, copy and paste this exact prompt into your `.cursorrules`, `CLAUDE.md`, or AI system instructions:
