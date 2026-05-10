@@ -25,6 +25,7 @@ type FileResult struct {
 	Errors      []graph.ErrorEdge
 	Concurrency []graph.ConcurrencyNode
 	TestEdges   []graph.TestEdge
+	Mutations   []graph.MutationEdge
 }
 
 // ParseFile parses a single .go file and extracts its nodes.
@@ -386,6 +387,25 @@ func extractFuncDecl(fset *token.FileSet, d *ast.FuncDecl, relPath, pkgName stri
 				File:           relPath,
 				Line:           callPos.Line,
 			})
+			return true
+		})
+
+		// Mutations Extraction
+		ast.Inspect(d.Body, func(n ast.Node) bool {
+			assign, ok := n.(*ast.AssignStmt)
+			if !ok {
+				return true
+			}
+			for _, lhs := range assign.Lhs {
+				if sel, ok := lhs.(*ast.SelectorExpr); ok {
+					result.Mutations = append(result.Mutations, graph.MutationEdge{
+						Field:    sel.Sel.Name,
+						Function: callerName,
+						File:     relPath,
+						Line:     fset.Position(assign.Pos()).Line,
+					})
+				}
+			}
 			return true
 		})
 	}

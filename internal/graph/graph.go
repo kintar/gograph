@@ -24,6 +24,15 @@ type Graph struct {
 	Concurrency   []ConcurrencyNode `json:"concurrency,omitempty"`
 	TestEdges     []TestEdge       `json:"test_edges,omitempty"`
 	Implements    []ImplementsEdge `json:"implements,omitempty"`
+	Mutations     []MutationEdge   `json:"mutations,omitempty"`
+}
+
+// MutationEdge represents an assignment to a struct field.
+type MutationEdge struct {
+	Field    string `json:"field"`
+	Function string `json:"function"`
+	File     string `json:"file"`
+	Line     int    `json:"line"`
 }
 
 // ImplementsEdge records absolute proof that a concrete type implements an interface.

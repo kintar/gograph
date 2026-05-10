@@ -97,6 +97,9 @@ gograph hotspot --top 20          # Expand to top 20
 gograph deps "internal/auth"      # Direct import dependencies of a package
 gograph deps "internal/auth" --transitive  # Full transitive closure
 gograph changes                   # New/modified/deleted symbols since last build
+gograph trace "parse failed"      # Trace an error string backwards to entry points
+gograph mutate "User.Status"      # Find functions that mutate a specific struct field
+gograph skeleton                  # Output the whole repository's API signatures (bodies stripped)
 ```
 
 **3. Agent JSON Integration:**

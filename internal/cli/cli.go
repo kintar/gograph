@@ -104,6 +104,12 @@ func Run(args []string) int {
 		return runOrphans()
 	case "godobj":
 		return runGodObj(args[1:])
+	case "skeleton":
+		return runSkeleton()
+	case "mutate":
+		return runMutate(args[1:])
+	case "trace":
+		return runTrace(args[1:])
 	case "complexity":
 		return runComplexity(args[1:])
 	case "coupling":
@@ -171,6 +177,9 @@ envs [str]           : os.Getenv/viper reads
 concurrency [str]    : goroutines/channels/mutexes
 tests <sym>          : tests exercising sym
 path <from> <to>     : shortest call chain between two symbols (BFS)
+trace <err_str>      : trace an error backwards from entry points to origin
+mutate <field>       : find functions that mutate a specific struct field
+skeleton             : output the whole repository's API signatures (function bodies stripped)
 stale                : check if graph is out of date vs source files
 orphans              : reachability-based dead code analysis
 godobj               : find god-object struct candidates (--methods N --fields N --calls N --top N)
@@ -307,6 +316,7 @@ func BuildGraph(absRoot string) (*graph.Graph, error) {
 		g.Errors = append(g.Errors, result.Errors...)
 		g.Concurrency = append(g.Concurrency, result.Concurrency...)
 		g.TestEdges = append(g.TestEdges, result.TestEdges...)
+		g.Mutations = append(g.Mutations, result.Mutations...)
 
 		dir := filepath.Dir(rel)
 		if _, ok := pkgMap[dir]; !ok {
@@ -697,6 +707,8 @@ SEARCH & NAVIGATION
   fields <struct>            List all fields and types of a struct.
   embeds <struct>            Find which structs embed the given struct.
   imports <pkg>              Find all files importing a given package path.
+  mutate <field>             Find functions that mutate a specific struct field.
+  skeleton                   Output the whole repository's API signatures with bodies stripped.
 
 CALL GRAPH
   callers <name>             Functions/methods that call the named symbol.
@@ -705,6 +717,7 @@ CALL GRAPH
   impact --uncommitted       Perform blast radius analysis on all currently modified,
                              uncommitted code lines using git diff.
   path <from> <to>           Shortest call chain between two symbols (BFS).
+  trace <err_str>            Find the origin of an error and trace backwards to entry points.
   orphans                    Functions unreachable from any entry point
                              (reachability analysis — stricter than 0-incoming).
 
@@ -1386,4 +1399,58 @@ func runErrors(args []string) int {
 	}
 	results := search.Errors(g, term)
 	return printResults("errors", term, results, "No custom errors or panics found.")
+}
+
+// runSkeleton prints a stripped skeleton of the repository structure.
+func runSkeleton() int {
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	fmt.Println(search.Skeleton(g))
+	return 0
+}
+
+// runMutate finds functions that mutate the given struct field.
+func runMutate(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gograph mutate <Field>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.Mutate(g, args[0])
+	return printResults("mutate", args[0], results, "No mutations found for that field.")
+}
+
+// runTrace traces an error string backwards from entry points.
+func runTrace(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gograph trace <error string>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	term := strings.Join(args, " ")
+	traces := search.Trace(g, term)
+	if len(traces) == 0 {
+		fmt.Printf("No trace found for error matching %q\n", term)
+		return 0
+	}
+
+	for i, t := range traces {
+		fmt.Printf("=== Trace %d: %q generated in %s ===\n", i+1, t.Error.Message, t.Error.Function)
+		for j, step := range t.Path {
+			fmt.Printf("  %d. %s (%s:%d)\n", j+1, step.Name, step.File, step.Line)
+		}
+		fmt.Println()
+	}
+	return 0
 }

@@ -63,6 +63,9 @@ gograph hotspot --top 20         # expand the hotspot window
 gograph deps "internal/auth"     # direct import dependencies of a package
 gograph deps "internal/auth" --transitive  # full transitive import closure
 gograph changes                  # new/modified/deleted symbols since last build
+gograph trace "parse failed"     # trace an error string backwards to entry points
+gograph mutate "User.Status"     # find functions that mutate a specific struct field
+gograph skeleton                 # output the whole repository's API signatures (bodies stripped)
 gograph capabilities            # print token-optimized AI agent cheat sheet
 gograph mcp <path>              # runs an MCP server over stdio
 ```
