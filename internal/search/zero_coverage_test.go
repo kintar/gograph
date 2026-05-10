@@ -70,7 +70,7 @@ func TestMutate(t *testing.T) {
 
 func TestImpact(t *testing.T) {
 	g := buildCoverageGraph()
-	res := search.Impact(g, "(*Server).Start")
+	res := search.Impact(g, "(*Server).Start", true)
 	if len(res) == 0 {
 		t.Error("expected Impact to return results for '(*Server).Start'")
 	}
@@ -78,7 +78,7 @@ func TestImpact(t *testing.T) {
 
 func TestTrace(t *testing.T) {
 	g := buildCoverageGraph()
-	res := search.Trace(g, "bind port")
+	res := search.Trace(g, "bind port", true)
 	if len(res) == 0 {
 		t.Error("expected Trace to return results for 'bind port'")
 	}
@@ -111,7 +111,7 @@ func TestOrphans(t *testing.T) {
 
 func TestErrors(t *testing.T) {
 	g := buildCoverageGraph()
-	res := search.Errors(g, "")
+	res := search.Errors(g, "", true)
 	if len(res) == 0 {
 		t.Error("expected Errors to return results")
 	}

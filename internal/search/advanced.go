@@ -9,22 +9,39 @@ import (
 	"github.com/ozgurcd/gograph/internal/graph"
 )
 
+func normalizeSymbolName(name string) string {
+	name = strings.TrimPrefix(name, "(")
+	if idx := strings.Index(name, ")."); idx >= 0 {
+		name = name[idx+2:]
+	}
+	if idx := strings.LastIndex(name, "."); idx >= 0 {
+		name = name[idx+1:]
+	}
+	return strings.ToLower(name)
+}
+
 // Path finds the shortest call chain from symbol `from` to symbol `to` using
 // BFS over the call graph edges. It returns the chain as a slice of Result
 // values ordered from source to destination. An empty slice means no path was
 // found. Both names are matched case-insensitively as substrings so partial
 // names (e.g. "ValidateUser" instead of "(AuthService).ValidateUser") work.
-func Path(g *graph.Graph, from, to string) []Result {
-	fl := strings.ToLower(from)
-	tl := strings.ToLower(to)
+// Package-qualified names like "cli.Run" are normalized to just "Run".
+func Path(g *graph.Graph, from, to string, includeTests bool) []Result {
+	fl := normalizeSymbolName(from)
+	tl := normalizeSymbolName(to)
 
 	matchesFrom := func(s string) bool { return strings.Contains(strings.ToLower(s), fl) }
 	matchesTo := func(s string) bool { return strings.Contains(strings.ToLower(s), tl) }
 
-	// Build adjacency list: callerName -> []CallEdge.
+	// Build case-insensitive adjacency list
 	adj := make(map[string][]graph.CallEdge)
+	adjLower := make(map[string][]graph.CallEdge)
 	for _, c := range g.Calls {
+		if !includeTests && isTestFile(c.File) {
+			continue
+		}
 		adj[c.CallerName] = append(adj[c.CallerName], c)
+		adjLower[strings.ToLower(c.CallerName)] = append(adjLower[strings.ToLower(c.CallerName)], c)
 	}
 
 	// Seed BFS from all nodes matching "from".
@@ -41,9 +58,15 @@ func Path(g *graph.Graph, from, to string) []Result {
 		}
 	}
 	for _, s := range g.Symbols {
-		if (matchesFrom(s.ID) || matchesFrom(s.Name)) && !visited[s.ID] {
-			visited[s.ID] = true
-			queue = append(queue, state{node: s.ID})
+		node := s.Name
+		if strings.HasPrefix(s.ID, "(") {
+			if idx := strings.Index(s.ID, ")"); idx > 0 {
+				node = s.ID[idx+1:]
+			}
+		}
+		if matchesFrom(node) && !visited[node] {
+			visited[node] = true
+			queue = append(queue, state{node: node})
 		}
 	}
 
@@ -69,18 +92,52 @@ func Path(g *graph.Graph, from, to string) []Result {
 				Name:  last.CalleeRaw,
 				File:  last.File,
 				Line:  last.Line,
+				Detail: "destination",
 				Score: 10,
 			})
 			return chain
 		}
 
 		for _, edge := range adj[cur.node] {
-			if !visited[edge.CalleeRaw] {
-				visited[edge.CalleeRaw] = true
+			nextNode := edge.CalleeRaw
+			if strings.Contains(nextNode, ".") {
+				normalized := normalizeSymbolName(nextNode)
+				parts := strings.Split(normalized, ".")
+				nextNode = parts[len(parts)-1]
+			}
+			if !visited[nextNode] {
+				visited[nextNode] = true
+				if _, exists := adj[nextNode]; exists || strings.Contains(nextNode, "(") {
+					visited[edge.CalleeRaw] = true
+				}
 				newPath := make([]graph.CallEdge, len(cur.path)+1)
 				copy(newPath, cur.path)
 				newPath[len(cur.path)] = edge
-				queue = append(queue, state{node: edge.CalleeRaw, path: newPath})
+				queue = append(queue, state{node: nextNode, path: newPath})
+				if _, exists := adj[nextNode]; !exists {
+					queue = append(queue, state{node: edge.CalleeRaw, path: newPath})
+				}
+			}
+		}
+		for _, edge := range adjLower[strings.ToLower(cur.node)] {
+			nextNode := edge.CalleeRaw
+			if strings.Contains(nextNode, ".") {
+				normalized := normalizeSymbolName(nextNode)
+				parts := strings.Split(normalized, ".")
+				nextNode = parts[len(parts)-1]
+			}
+			if !visited[nextNode] {
+				visited[nextNode] = true
+				if _, exists := adj[nextNode]; exists || strings.Contains(nextNode, "(") {
+					visited[edge.CalleeRaw] = true
+				}
+				newPath := make([]graph.CallEdge, len(cur.path)+1)
+				copy(newPath, cur.path)
+				newPath[len(cur.path)] = edge
+				queue = append(queue, state{node: nextNode, path: newPath})
+				if _, exists := adj[nextNode]; !exists {
+					queue = append(queue, state{node: edge.CalleeRaw, path: newPath})
+				}
 			}
 		}
 	}

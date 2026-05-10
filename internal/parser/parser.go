@@ -377,17 +377,42 @@ func extractFuncDecl(fset *token.FileSet, d *ast.FuncDecl, relPath, pkgName stri
 			}
 
 			// SQL Extraction
-			if strings.Contains(callee, "Query") || strings.Contains(callee, "Exec") || strings.Contains(callee, "Raw") {
-				if len(call.Args) > 0 {
+			if callee != "" {
+				parts := strings.Split(callee, ".")
+				method := parts[len(parts)-1]
+				isSQLMethod := method == "Query" || method == "QueryRow" || method == "Exec" || method == "QueryContext" || method == "QueryRowContext" || method == "ExecContext" || method == "Raw"
+				
+				if isSQLMethod && len(call.Args) > 0 {
+					var queryStr string
+					var found bool
+					
 					for _, arg := range call.Args {
 						if lit, ok := arg.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+							queryStr = strings.Trim(lit.Value, "`\"")
+							found = true
+							break
+						} else if id, ok := arg.(*ast.Ident); ok {
+							if val, ok := resolveStringLiteral(d.Body, id.Name); ok {
+								queryStr = val
+								found = true
+								break
+							}
+						}
+					}
+					
+					if found {
+						upperQ := strings.ToUpper(queryStr)
+						if strings.Contains(upperQ, "SELECT ") || strings.Contains(upperQ, "INSERT ") || 
+							strings.Contains(upperQ, "UPDATE ") || strings.Contains(upperQ, "DELETE ") || 
+							strings.Contains(upperQ, "WITH ") || strings.Contains(upperQ, "CREATE ") || 
+							strings.Contains(upperQ, "ALTER ") || strings.Contains(upperQ, "DROP ") {
+							
 							result.SQLs = append(result.SQLs, graph.SQLEdge{
-								Query:    strings.Trim(lit.Value, "\""),
+								Query:    queryStr,
 								Function: callerName,
 								File:     relPath,
 								Line:     callPos.Line,
 							})
-							break
 						}
 					}
 				}
@@ -620,4 +645,35 @@ func envRead(call *ast.CallExpr, callee string, line int, file, fn string) (grap
 		Line:     line,
 		Function: fn,
 	}, true
+}
+
+func resolveStringLiteral(body *ast.BlockStmt, identName string) (string, bool) {
+	if body == nil {
+		return "", false
+	}
+	var found string
+	var ok bool
+	ast.Inspect(body, func(n ast.Node) bool {
+		if ok {
+			return false
+		}
+		assign, isAssign := n.(*ast.AssignStmt)
+		if !isAssign {
+			return true
+		}
+		for i, lhs := range assign.Lhs {
+			if id, isId := lhs.(*ast.Ident); isId && id.Name == identName {
+				if i < len(assign.Rhs) {
+					rhs := assign.Rhs[i]
+					if lit, isLit := rhs.(*ast.BasicLit); isLit && lit.Kind == token.STRING {
+						found = strings.Trim(lit.Value, "`\"")
+						ok = true
+						return false
+					}
+				}
+			}
+		}
+		return true
+	})
+	return found, ok
 }

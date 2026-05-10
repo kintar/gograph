@@ -47,6 +47,14 @@ func Run(args []string) int {
 	jsonMode = false
 	filtered := args[:0]
 	for _, a := range args {
+		if a == "--help" || a == "-h" {
+			if len(args) > 1 && args[0] != "--help" && args[0] != "-h" {
+				printCommandHelp(args[0])
+			} else {
+				printHelp()
+			}
+			return 0
+		}
 		if a == "--json" {
 			jsonMode = true
 		} else {
@@ -182,12 +190,12 @@ implementers <iface> : structs implementing iface
 public <pkg>         : exported API of pkg
 routes               : HTTP REST routes
 sql                  : raw SQL queries mapped
-errors               : custom errors/panics
+errors [--no-tests]: custom errors/panics (use --no-tests to exclude test files)
 envs [str]           : os.Getenv/viper reads
 concurrency [str]    : goroutines/channels/mutexes
 tests <sym>          : tests exercising sym
 path <from> <to>     : shortest call chain between two symbols (BFS)
-trace <err_str>      : trace an error backwards from entry points to origin
+trace <err_str> [--no-tests]: trace an error backwards from entry points to origin (use --no-tests to exclude test files)
 mutate <field>       : find functions that mutate a specific struct field
 arity [--min 5]      : find functions with many arguments (long parameter list smell)
 skeleton             : output the whole repository's API signatures (function bodies stripped)
@@ -196,7 +204,7 @@ orphans              : reachability-based dead code analysis
 godobj               : find god-object struct candidates (--methods N --fields N --calls N --top N)
 complexity [sym]     : cyclomatic complexity estimate per function (highest first)
 coupling [pkg]       : fan-in, fan-out, and instability per package
-context <sym>        : bundle node+source+callers+callees+tests (saves 4-5 tool calls)
+context <sym> [--limit N]: bundle node+source+callers+callees+tests (saves 4-5 tool calls). Use --limit to cap output.
 hotspot [--top N]    : rank functions by incoming calls (study these first)
 deps <pkg> [--transitive] : import dependency tree of a package
 changes              : symbols modified/new/deleted since last build
@@ -692,8 +700,7 @@ func sortGraph(g *graph.Graph) {
 	})
 }
 
-func printHelp() {
-	fmt.Print(`gograph — local AST-based Go repository context indexer for AI agents
+const helpText = `gograph — local AST-based Go repository context indexer for AI agents
 
 USAGE
   gograph <command> [arguments] [--json]
@@ -791,7 +798,38 @@ OUTPUTS (after 'build')
   .gograph/graph-sql.md      .gograph/graph-concurrency.md
   .gograph/graph-tests.md    .gograph/graph-deps.md
   .gograph/graph-errors.md   .gograph/graph-config.md
-`)
+`
+
+func printHelp() {
+	fmt.Print(helpText)
+}
+
+func printCommandHelp(cmd string) {
+	lines := strings.Split(helpText, "\n")
+	found := false
+	for _, line := range lines {
+		if !found && strings.HasPrefix(line, "  "+cmd) && (len(line) == len("  "+cmd) || line[len("  "+cmd)] == ' ' || line[len("  "+cmd)] == '[') {
+			found = true
+			fmt.Println("USAGE")
+			descStart := strings.Index(line[2:], "  ")
+			if descStart != -1 {
+				usagePart := line[2 : 2+descStart]
+				descPart := strings.TrimSpace(line[2+descStart:])
+				fmt.Printf("  gograph %s\n\nDESCRIPTION\n  %s\n", strings.TrimSpace(usagePart), descPart)
+			} else {
+				fmt.Printf("  gograph %s\n\nDESCRIPTION\n", strings.TrimSpace(line))
+			}
+		} else if found {
+			if strings.HasPrefix(line, "                             ") || strings.HasPrefix(line, "    ") {
+				fmt.Printf("  %s\n", strings.TrimSpace(line))
+			} else {
+				break
+			}
+		}
+	}
+	if !found {
+		printHelp()
+	}
 }
 
 // runPath finds the shortest call chain between two symbols via BFS.
@@ -805,7 +843,7 @@ func runPath(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	chain := search.Path(g, args[0], args[1])
+	chain := search.Path(g, args[0], args[1], true)
 	if len(chain) == 0 {
 		fmt.Printf("No call path found from %q to %q.\n", args[0], args[1])
 		return 0
@@ -1029,10 +1067,28 @@ func runCoupling(args []string) int {
 // runContext bundles node+source+callers+callees+tests for a symbol in one call.
 func runContext(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: gograph context <symbol>")
+		fmt.Fprintln(os.Stderr, "usage: gograph context <symbol> [--limit N]")
 		return 1
 	}
-	term := strings.Join(args, " ")
+	term := ""
+	limit := 0
+	filtered := args[:0]
+	i := 0
+	for i < len(args) {
+		a := args[i]
+		if (a == "--limit" || a == "-n") && i+1 < len(args) {
+			if n, err := strconv.Atoi(args[i+1]); err == nil {
+				limit = n
+			}
+			i += 2
+			continue
+		}
+		filtered = append(filtered, a)
+		i++
+	}
+	if len(filtered) > 0 {
+		term = strings.Join(filtered, " ")
+	}
 	g, err := loadGraph(".")
 	if err != nil {
 		if jsonMode {
@@ -1075,7 +1131,13 @@ func runContext(args []string) int {
 		fmt.Printf("(source unavailable: %v)\n\n", result.SourceErr)
 	}
 
-	if len(result.Callers) > 0 {
+	if limit > 0 && len(result.Callers) > limit {
+		fmt.Printf("--- CALLERS (showing %d of %d) ---\n", limit, len(result.Callers))
+		for _, r := range result.Callers[:limit] {
+			fmt.Println(r.String())
+		}
+		fmt.Printf("... and %d more callers. Use --limit %d to see all.\n\n", len(result.Callers)-limit, len(result.Callers))
+	} else if len(result.Callers) > 0 {
 		fmt.Printf("--- CALLERS (%d) ---\n", len(result.Callers))
 		for _, r := range result.Callers {
 			fmt.Println(r.String())
@@ -1083,7 +1145,13 @@ func runContext(args []string) int {
 		fmt.Println()
 	}
 
-	if len(result.Callees) > 0 {
+	if limit > 0 && len(result.Callees) > limit {
+		fmt.Printf("--- CALLEES (showing %d of %d) ---\n", limit, len(result.Callees))
+		for _, r := range result.Callees[:limit] {
+			fmt.Println(r.String())
+		}
+		fmt.Printf("... and %d more callees. Use --limit %d to see all.\n\n", len(result.Callees)-limit, len(result.Callees))
+	} else if len(result.Callees) > 0 {
 		fmt.Printf("--- CALLEES (%d) ---\n", len(result.Callees))
 		for _, r := range result.Callees {
 			fmt.Println(r.String())
@@ -1349,7 +1417,7 @@ func runImpact(args []string) int {
 		return runImpactUncommitted(g)
 	}
 
-	results := search.Impact(g, strings.Join(args, " "))
+	results := search.Impact(g, strings.Join(args, " "), true)
 	return printResults("impact", strings.Join(args, " "), results, fmt.Sprintf("No callers found in blast radius of %q.", args[0]))
 }
 
@@ -1412,7 +1480,7 @@ func runImpactUncommitted(g *graph.Graph) int {
 	}
 
 	reason := fmt.Sprintf("downstream impact of uncommitted changes (%d symbols)", len(modifiedSymbolNames))
-	results := search.ImpactMultiple(g, modifiedSymbolNames, reason)
+	results := search.ImpactMultiple(g, modifiedSymbolNames, reason, true)
 	return printResults("impact", "--uncommitted", results, "No callers found in blast radius of uncommitted changes.")
 }
 
@@ -1445,15 +1513,24 @@ func runSQL(args []string) int {
 // runErrors lists custom error variables and panics mapped to their source.
 func runErrors(args []string) int {
 	term := ""
-	if len(args) > 0 {
-		term = args[0]
+	includeTests := true
+	filtered := args[:0]
+	for _, a := range args {
+		if a == "--no-tests" {
+			includeTests = false
+		} else {
+			filtered = append(filtered, a)
+		}
+	}
+	if len(filtered) > 0 {
+		term = filtered[0]
 	}
 	g, err := loadGraph(".")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	results := search.Errors(g, term)
+	results := search.Errors(g, term, includeTests)
 	return printResults("errors", term, results, "No custom errors or panics found.")
 }
 
@@ -1486,16 +1563,25 @@ func runMutate(args []string) int {
 // runTrace traces an error string backwards from entry points.
 func runTrace(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: gograph trace <error string>")
+		fmt.Fprintln(os.Stderr, "usage: gograph trace <error string> [--no-tests]")
 		return 1
+	}
+	includeTests := true
+	termParts := args[:0]
+	for _, a := range args {
+		if a == "--no-tests" {
+			includeTests = false
+		} else {
+			termParts = append(termParts, a)
+		}
 	}
 	g, err := loadGraph(".")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	term := strings.Join(args, " ")
-	traces := search.Trace(g, term)
+	term := strings.Join(termParts, " ")
+	traces := search.Trace(g, term, includeTests)
 	if len(traces) == 0 {
 		fmt.Printf("No trace found for error matching %q\n", term)
 		return 0

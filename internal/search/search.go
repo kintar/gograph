@@ -496,12 +496,12 @@ func Fields(g *graph.Graph, structName string) []Result {
 }
 
 // Impact traverses the call graph backwards to find all symbols that eventually call the target symbol.
-func Impact(g *graph.Graph, name string) []Result {
-	return ImpactMultiple(g, []string{name}, "downstream impact of "+name)
+func Impact(g *graph.Graph, name string, includeTests bool) []Result {
+	return ImpactMultiple(g, []string{name}, "downstream impact of "+name, includeTests)
 }
 
 // ImpactMultiple calculates blast radius for multiple root symbols simultaneously.
-func ImpactMultiple(g *graph.Graph, names []string, reason string) []Result {
+func ImpactMultiple(g *graph.Graph, names []string, reason string, includeTests bool) []Result {
 	callerSymbols := make(map[string]graph.SymbolNode)
 	for _, s := range g.Symbols {
 		callerSymbols[s.ID] = s
@@ -523,6 +523,9 @@ func ImpactMultiple(g *graph.Graph, names []string, reason string) []Result {
 		queue = queue[1:]
 
 		for _, c := range g.Calls {
+			if !includeTests && isTestFile(c.File) {
+				continue
+			}
 			if strings.Contains(strings.ToLower(c.CalleeRaw), term) {
 				callerID := c.CallerSymbolID
 				if !seenIDs[callerID] {
@@ -612,10 +615,14 @@ func SQL(g *graph.Graph, term string) []Result {
 }
 
 // Errors extracts all custom error messages and panics.
-func Errors(g *graph.Graph, term string) []Result {
+// Set includeTests to false to exclude errors from test files.
+func Errors(g *graph.Graph, term string, includeTests bool) []Result {
 	var results []Result
 	nl := strings.ToLower(term)
 	for _, err := range g.Errors {
+		if !includeTests && isTestFile(err.File) {
+			continue
+		}
 		if term == "" || strings.Contains(strings.ToLower(err.Message), nl) {
 			results = append(results, Result{
 				Kind:   "error",
@@ -629,6 +636,23 @@ func Errors(g *graph.Graph, term string) []Result {
 	}
 	sortResults(results)
 	return results
+}
+
+func isTestFile(path string) bool {
+	if strings.HasSuffix(path, "_test.go") {
+		return true
+	}
+	fl := strings.ToLower(path)
+	if strings.Contains(fl, "mock") || strings.Contains(fl, "fake") {
+		return true
+	}
+	parts := strings.Split(path, "/")
+	for _, p := range parts {
+		if p == "testdata" || p == "test" || p == "tests" {
+			return true
+		}
+	}
+	return false
 }
 
 // Embeds shows what structs embed the target struct.
@@ -949,8 +973,7 @@ func Mocks(g *graph.Graph, interfaceName string) []Result {
 	implementers := Implementers(g, interfaceName)
 	var results []Result
 	for _, res := range implementers {
-		fl := strings.ToLower(res.File)
-		if strings.HasSuffix(fl, "_test.go") || strings.Contains(fl, "mock") || strings.Contains(fl, "fake") {
+		if isTestFile(res.File) {
 			res.Kind = "mock"
 			res.Detail = "mock " + res.Detail
 			results = append(results, res)

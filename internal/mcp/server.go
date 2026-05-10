@@ -198,7 +198,7 @@ func Serve(g *graph.Graph, rebuild func() (*graph.Graph, error)) error {
 		if !ok {
 			return mcp.NewToolResultError("symbol must be a string"), nil
 		}
-		results := search.Impact(g, sym)
+		results := search.Impact(g, sym, true)
 		return formatResults(results), nil
 	})
 
@@ -269,7 +269,7 @@ func Serve(g *graph.Graph, rebuild func() (*graph.Graph, error)) error {
 				term = t
 			}
 		}
-		results := search.Errors(g, term)
+		results := search.Errors(g, term, true)
 		return formatResults(results), nil
 	})
 

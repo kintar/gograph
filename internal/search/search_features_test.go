@@ -43,7 +43,7 @@ func TestSearchFeatures(t *testing.T) {
 	})
 
 	t.Run("Errors", func(t *testing.T) {
-		res := search.Errors(g, "")
+		res := search.Errors(g, "", true)
 		if len(res) != 2 {
 			t.Errorf("expected 2 error calls, got %d", len(res))
 		}
