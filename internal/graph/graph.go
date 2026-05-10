@@ -23,6 +23,13 @@ type Graph struct {
 	Errors        []ErrorEdge      `json:"errors,omitempty"`
 	Concurrency   []ConcurrencyNode `json:"concurrency,omitempty"`
 	TestEdges     []TestEdge       `json:"test_edges,omitempty"`
+	Implements    []ImplementsEdge `json:"implements,omitempty"`
+}
+
+// ImplementsEdge records absolute proof that a concrete type implements an interface.
+type ImplementsEdge struct {
+	Interface string `json:"interface"`
+	Concrete  string `json:"concrete"`
 }
 
 // SQLEdge represents an extracted SQL query.

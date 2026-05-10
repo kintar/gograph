@@ -313,6 +313,32 @@ func Implementers(g *graph.Graph, interfaceName string) []Result {
 		return results
 	}
 
+	// 1. Precise Fast-Path (if --precise was used)
+	if len(g.Implements) > 0 {
+		for _, edge := range g.Implements {
+			if strings.ToLower(edge.Interface) == nl {
+				// Find the concrete symbol
+				for _, s := range g.Symbols {
+					if s.Kind == graph.KindStruct && s.Name == edge.Concrete {
+						results = append(results, Result{
+							Kind:   "struct",
+							Name:   s.Name,
+							File:   s.File,
+							Line:   s.Line,
+							Detail: "implements " + iface.Name + " (type-checked)",
+							Score:  10,
+						})
+					}
+				}
+			}
+		}
+		if len(results) > 0 {
+			sortResults(results)
+			return results
+		}
+	}
+
+	// 2. AST Heuristic Fallback (duck-typing)
 	var structs []graph.SymbolNode
 	for _, s := range g.Symbols {
 		if s.Kind == graph.KindStruct {
@@ -664,6 +690,34 @@ func Envs(g *graph.Graph, term string) []Result {
 // listed in InterfaceMethods (by name). Only interfaces defined in the graph
 // are checked.
 func Interfaces(g *graph.Graph, structName string) []Result {
+	var results []Result
+
+	// 1. Precise Fast-Path (if --precise was used)
+	if len(g.Implements) > 0 {
+		for _, edge := range g.Implements {
+			if strings.EqualFold(edge.Concrete, structName) {
+				// Find the interface symbol
+				for _, s := range g.Symbols {
+					if s.Kind == graph.KindInterface && s.Name == edge.Interface {
+						results = append(results, Result{
+							Kind:   "interface",
+							Name:   s.Name,
+							File:   s.File,
+							Line:   s.Line,
+							Detail: fmt.Sprintf("%s satisfies %s (type-checked)", structName, s.Name),
+							Score:  10,
+						})
+					}
+				}
+			}
+		}
+		if len(results) > 0 {
+			sortResults(results)
+			return results
+		}
+	}
+
+	// 2. AST Heuristic Fallback (duck-typing)
 	// Build a map of method names owned by the struct (via method receivers).
 	structMethods := make(map[string]bool)
 	for _, s := range g.Symbols {
@@ -677,7 +731,6 @@ func Interfaces(g *graph.Graph, structName string) []Result {
 		}
 	}
 
-	var results []Result
 	for _, iface := range g.Symbols {
 		if iface.Kind != graph.KindInterface || len(iface.InterfaceMethods) == 0 {
 			continue

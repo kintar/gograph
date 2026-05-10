@@ -14,6 +14,7 @@ import (
 	"github.com/ozgurcd/gograph/internal/graph"
 	"github.com/ozgurcd/gograph/internal/mcp"
 	"github.com/ozgurcd/gograph/internal/parser"
+	"github.com/ozgurcd/gograph/internal/precise"
 	"github.com/ozgurcd/gograph/internal/report"
 	"github.com/ozgurcd/gograph/internal/scanner"
 	"github.com/ozgurcd/gograph/internal/search"
@@ -141,7 +142,8 @@ Read .gograph/GRAPH_REPORT.md first.
 
 COMMANDS (token-optimized):
 (Note: All search/navigation commands support --json for stable machine parsing)
-build .              : parse AST, gen GRAPH_REPORT.md & .gograph/*
+build . [--precise]  : parse AST, gen GRAPH_REPORT.md & .gograph/*
+                       (use --precise for exact type-checked call edges)
 query <str>          : search symbols/files/pkgs
 focus <pkg>          : isolate context for a package
 callers <fn>         : who calls fn
@@ -176,9 +178,19 @@ imports <pkg>        : trace external/internal usage`)
 
 func runBuild(args []string) int {
 	root := "."
-	if len(args) > 0 {
-		root = args[0]
+	preciseMode := false
+	var filteredArgs []string
+	for _, a := range args {
+		if a == "--precise" {
+			preciseMode = true
+		} else {
+			filteredArgs = append(filteredArgs, a)
+		}
 	}
+	if len(filteredArgs) > 0 {
+		root = filteredArgs[0]
+	}
+	
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error resolving path: %v\n", err)
@@ -192,6 +204,15 @@ func runBuild(args []string) int {
 		fmt.Fprintf(os.Stderr, "error building graph: %v\n", err)
 		return 1
 	}
+
+	if preciseMode {
+		fmt.Println("  running type-checked precision analysis (this may take a moment)...")
+		// Delay import check by using precise.Enrich explicitly
+		if err := precise.Enrich(absRoot, g); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: precise enrichment failed: %v\n", err)
+		}
+	}
+
 
 	outDir := filepath.Join(absRoot, outputDir)
 	if err := os.MkdirAll(outDir, 0o750); err != nil {
@@ -652,6 +673,8 @@ INDEXING
   build [path]               Walk and parse a Go repository. Generates graph.json
                              and 9 targeted Markdown reports in .gograph/.
                              Run after any major code change. Default path: .
+                             Supports --precise to perform type-checked Class
+                             Hierarchy Analysis (CHA) for absolute call edges.
   stale                      Check if graph.json is older than any source file.
                              Agents should run this before structural analysis.
 

@@ -39,6 +39,8 @@ go install github.com/ozgurcd/gograph@latest
 **1. Generate the Graph (Run this after every major code change):**
 ```bash
 gograph build .
+# OR for absolute type-checked precision (slower, but exact dynamic dispatch & interface satisfaction proofs):
+gograph build . --precise
 ```
 *This instantly generates `.gograph/graph.json` and `.gograph/GRAPH_REPORT.md`.*
 
@@ -49,7 +51,7 @@ gograph focus "internal/auth"     # Generate a highly targeted context for one p
 gograph callers "ValidateToken"   # See what functions call ValidateToken
 gograph callees "InitServer"      # See what InitServer calls
 gograph implementers "AuthService" # See which structs implement an interface
-gograph interfaces "UserService"  # See which interfaces a struct satisfies (duck-typing)
+gograph interfaces "UserService"  # See which interfaces a struct satisfies (type-checked if --precise was used)
 gograph fields "User"             # Extract all fields and types of a struct
 gograph source "ValidateToken"    # Extract the source code for a specific symbol
 gograph impact "ValidateToken"    # View the full blast radius (all downstream callers)
