@@ -104,6 +104,7 @@ func TestAllCommandsRegistered(t *testing.T) {
 		"globals",
 		"mocks",
 		"trace",
+		"arity",
 		"mutate",
 		"skeleton",
 		// aliases

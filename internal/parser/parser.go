@@ -236,8 +236,18 @@ func extractFuncDecl(fset *token.FileSet, d *ast.FuncDecl, relPath, pkgName stri
 
 	sig := funcSignature(d)
 	methodSig := ""
+	arity := 0
 	if d.Type != nil {
 		methodSig = funcTypeSignature(d.Type)
+		if d.Type.Params != nil {
+			for _, field := range d.Type.Params.List {
+				if len(field.Names) > 0 {
+					arity += len(field.Names)
+				} else {
+					arity += 1
+				}
+			}
+		}
 	}
 	id := fmt.Sprintf("%s::%s", relPath, d.Name.Name)
 	if receiver != "" {
@@ -245,17 +255,18 @@ func extractFuncDecl(fset *token.FileSet, d *ast.FuncDecl, relPath, pkgName stri
 	}
 
 	sym := graph.SymbolNode{
-		ID:          id,
-		Kind:        kind,
-		Name:        d.Name.Name,
-		Receiver:    receiver,
-		PackageName: pkgName,
-		File:        relPath,
-		Line:        pos.Line,
-		EndLine:     endPos.Line,
+		ID:              id,
+		Kind:            kind,
+		Name:            d.Name.Name,
+		Receiver:        receiver,
+		PackageName:     pkgName,
+		File:            relPath,
+		Line:            pos.Line,
+		EndLine:         endPos.Line,
 		Doc:             strings.TrimSpace(doc),
 		Signature:       sig,
 		MethodSignature: methodSig,
+		Arity:           arity,
 	}
 	result.Symbols = append(result.Symbols, sym)
 

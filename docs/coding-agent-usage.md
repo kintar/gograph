@@ -65,6 +65,7 @@ gograph deps "internal/auth" --transitive  # full transitive import closure
 gograph changes                  # new/modified/deleted symbols since last build
 gograph trace "parse failed"     # trace an error string backwards to entry points
 gograph mutate "User.Status"     # find functions that mutate a specific struct field
+gograph arity --min 5            # find functions with many arguments (long parameter list smell)
 gograph skeleton                 # output the whole repository's API signatures (bodies stripped)
 gograph constructors <struct>    # find factory functions returning a named struct
 gograph schema <table>           # find structs mapped to a database table or schema via tags

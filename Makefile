@@ -5,17 +5,17 @@ INSTALL   = /usr/local/bin
 
 .PHONY: build test run-build clean bump-patch bump-minor bump-major install release
 
-# Read the current version from .bumpversion.cfg after bumping.
-# grep picks the 'current_version = x.y.z' line; awk extracts the last field.
-build: bump-patch
+build:
 	$(eval VERSION := $(shell grep '^current_version' .bumpversion.cfg | awk '{print $$3}'))
+	$(eval GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown"))
+	$(eval DIRTY := $(shell git diff --quiet || echo '-dirty'))
 	@mkdir -p $(BUILD_DIR)
-	go build -ldflags "-X main.version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY) $(CMD)
-	@echo "Built $(BUILD_DIR)/$(BINARY) v$(VERSION)"
+	go build -ldflags "-X main.version=$(VERSION)-$(GIT_COMMIT)$(DIRTY)" -o $(BUILD_DIR)/$(BINARY) $(CMD)
+	@echo "Built $(BUILD_DIR)/$(BINARY) v$(VERSION)-$(GIT_COMMIT)$(DIRTY)"
 
 release:
-	$(eval VERSION := $(shell grep '^current_version' .bumpversion.cfg | awk '{print $$3}'))
-	git tag -a v$(VERSION) -m "Release v$(VERSION)" || true
+	@echo "Bumping patch version, committing, and tagging..."
+	bump2version patch
 	git push origin master --tags
 
 # install only copies whatever is already in bin/ — no implicit build.

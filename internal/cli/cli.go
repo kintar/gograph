@@ -110,6 +110,8 @@ func Run(args []string) int {
 		return runMutate(args[1:])
 	case "trace":
 		return runTrace(args[1:])
+	case "arity":
+		return runArity(args[1:])
 	case "complexity":
 		return runComplexity(args[1:])
 	case "coupling":
@@ -187,6 +189,7 @@ tests <sym>          : tests exercising sym
 path <from> <to>     : shortest call chain between two symbols (BFS)
 trace <err_str>      : trace an error backwards from entry points to origin
 mutate <field>       : find functions that mutate a specific struct field
+arity [--min 5]      : find functions with many arguments (long parameter list smell)
 skeleton             : output the whole repository's API signatures (function bodies stripped)
 stale                : check if graph is out of date vs source files
 orphans              : reachability-based dead code analysis
@@ -720,6 +723,7 @@ SEARCH & NAVIGATION
   embeds <struct>            Find which structs embed the given struct.
   imports <pkg>              Find all files importing a given package path.
   mutate <field>             Find functions that mutate a specific struct field.
+  arity [--min 5]            Find functions with many arguments (long parameter list smell).
   skeleton                   Output the whole repository's API signatures with bodies stripped.
 
 CALL GRAPH
@@ -909,6 +913,42 @@ func runGodObj(args []string) int {
 	for _, c := range candidates {
 		fmt.Printf("[%-8s] %s — %d methods, %d fields, %d outgoing calls  (%s:%d)\n",
 			c.Severity, c.Name, c.MethodCount, c.FieldCount, c.OutgoingCalls, c.File, c.Line)
+	}
+	return 0
+}
+
+func runArity(args []string) int {
+	minArgs := 5
+	for i, arg := range args {
+		if arg == "--min" && i+1 < len(args) {
+			parsed, err := strconv.Atoi(args[i+1])
+			if err == nil {
+				minArgs = parsed
+			}
+		}
+	}
+
+	g, err := loadGraph(".")
+	if err != nil {
+		if jsonMode {
+			return PrintJSON(errEnvelope("arity", err.Error()))
+		}
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	results := search.Arity(g, minArgs)
+	if jsonMode {
+		return PrintJSON(okEnvelope("arity", "", results, len(results)))
+	}
+
+	if len(results) == 0 {
+		fmt.Printf("No functions found with >= %d arguments.\n", minArgs)
+		return 0
+	}
+
+	fmt.Printf("Functions with %d+ arguments:\n", minArgs)
+	for _, r := range results {
+		fmt.Printf("  %s (%s:%d) - %s\n", r.Name, r.File, r.Line, r.Detail)
 	}
 	return 0
 }

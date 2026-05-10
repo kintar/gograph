@@ -137,6 +137,7 @@ type SymbolNode struct {
 	InterfaceMethods map[string]string `json:"interface_methods,omitempty"`
 	StructFields     []StructField     `json:"struct_fields,omitempty"`
 	EmbeddedStructs  []string          `json:"embedded_structs,omitempty"`
+	Arity            int               `json:"arity,omitempty"`
 }
 
 // StructField represents a field inside a struct.

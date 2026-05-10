@@ -87,6 +87,19 @@ func TestComplexity_NoMatch(t *testing.T) {
 	}
 }
 
+func TestArity(t *testing.T) {
+	g := &graph.Graph{
+		Symbols: []graph.SymbolNode{
+			{ID: "HighArity", Name: "HighArity", Kind: graph.KindFunction, Arity: 6},
+			{ID: "LowArity", Name: "LowArity", Kind: graph.KindFunction, Arity: 2},
+		},
+	}
+	res := search.Arity(g, 5)
+	if len(res) != 1 || res[0].Name != "HighArity" {
+		t.Fatalf("expected 1 result (HighArity), got %v", res)
+	}
+}
+
 // TestComplexity_SortedDescending verifies the highest-score result comes first.
 func TestComplexity_SortedDescending(t *testing.T) {
 	root := repoRoot(t)
