@@ -28,6 +28,16 @@ install:
 test:
 	go test ./...
 
+test-coverage:
+	go test ./... -coverprofile=coverage.out
+	go tool cover -func=coverage.out
+
+test-fuzz:
+	@echo "Running FuzzConstructors for 5s..."
+	go test -fuzz=FuzzConstructors -fuzztime=5s ./internal/search
+	@echo "Running FuzzSchema for 5s..."
+	go test -fuzz=FuzzSchema -fuzztime=5s ./internal/search
+
 run-build:
 	go run $(CMD) build .
 
@@ -35,10 +45,10 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 bump-patch:
-	bump2version patch --allow-dirty
+	bump2version --no-commit patch --allow-dirty
 
 bump-minor:
-	bump2version minor --allow-dirty
+	bump2version --no-commit minor --allow-dirty
 
 bump-major:
-	bump2version major --allow-dirty
+	bump2version --no-commit major --allow-dirty

@@ -37,8 +37,41 @@ func buildRichGraph() *graph.Graph {
 				},
 			},
 			// Worker has String method -> satisfies Stringer but NOT ReadWriter
-			{Name: "String", Kind: graph.KindMethod, Receiver: "*Worker", File: "worker.go", Line: 10},
+			{Name: "String", Kind: graph.KindMethod, Receiver: "*Worker", File: "worker.go", Line: 10, MethodSignature: "func() string"},
 			// Worker does not have Read/Write -> doesn't satisfy ReadWriter
+			
+			// For Constructors tests
+			{Name: "NewWorker", Kind: graph.KindFunction, Signature: "func() *Worker", File: "worker.go", Line: 20},
+			{Name: "NewWorkerVal", Kind: graph.KindFunction, Signature: "func() Worker", File: "worker.go", Line: 25},
+			{Name: "NewWorkerErr", Kind: graph.KindFunction, Signature: "func() (*Worker, error)", File: "worker.go", Line: 30},
+			{Name: "NotWorker", Kind: graph.KindFunction, Signature: "func() *WorkerOther", File: "worker.go", Line: 35},
+			{Name: "VoidFunc", Kind: graph.KindFunction, Signature: "func(w *Worker)", File: "worker.go", Line: 40},
+
+			// For Schema tests
+			{
+				Name: "User", Kind: graph.KindStruct, File: "user.go", Line: 10,
+				StructFields: []graph.StructField{
+					{Name: "ID", Type: "int", Tag: `db:"users" json:"id"`},
+				},
+			},
+			{
+				Name: "Post", Kind: graph.KindStruct, File: "post.go", Line: 10,
+				StructFields: []graph.StructField{
+					{Name: "ID", Type: "int", Tag: `gorm:"table:posts"`},
+				},
+			},
+
+			// For Globals tests
+			{Name: "globalConfig", Kind: graph.KindVar, PackageName: "config", File: "config.go", Line: 5},
+			
+			// For Mocks tests
+			{
+				Name: "MockStringer", Kind: graph.KindStruct, File: "stringer_test.go", Line: 15,
+			},
+			{Name: "String", Kind: graph.KindMethod, Receiver: "*MockStringer", File: "stringer_test.go", Line: 20, MethodSignature: "func() string"},
+		},
+		Mutations: []graph.MutationEdge{
+			{Function: "Load", Field: "globalConfig", File: "config.go", Line: 10},
 		},
 		Concurrency: []graph.ConcurrencyNode{
 			{Kind: "goroutine", Function: "Start", File: "server.go", Line: 20, Detail: "go handleConn"},
@@ -164,5 +197,80 @@ func TestTests_NoMatch(t *testing.T) {
 	res := search.Tests(g, "NonExistentSymbol")
 	if len(res) != 0 {
 		t.Errorf("expected 0 results for non-existent symbol, got %d", len(res))
+	}
+}
+
+func TestConstructors(t *testing.T) {
+	g := buildRichGraph()
+	res := search.Constructors(g, "Worker")
+	if len(res) != 3 { // NewWorker, NewWorkerVal, NewWorkerErr
+		t.Errorf("expected 3 constructors, got %d: %v", len(res), res)
+	}
+	names := make(map[string]bool)
+	for _, r := range res {
+		names[r.Name] = true
+	}
+	for _, n := range []string{"NewWorker", "NewWorkerVal", "NewWorkerErr"} {
+		if !names[n] {
+			t.Errorf("expected %s to be recognized as constructor", n)
+		}
+	}
+}
+
+func TestSchema(t *testing.T) {
+	g := buildRichGraph()
+	// Test matching against db tag
+	res := search.Schema(g, "users")
+	if len(res) != 1 || res[0].Name != "User" {
+		t.Errorf("expected User struct for 'users' table, got %v", res)
+	}
+
+	// Test matching against gorm tag
+	res2 := search.Schema(g, "posts")
+	if len(res2) != 1 || res2[0].Name != "Post" {
+		t.Errorf("expected Post struct for 'posts' table, got %v", res2)
+	}
+
+	// Test case insensitive match
+	res3 := search.Schema(g, "USERS")
+	if len(res3) != 1 || res3[0].Name != "User" {
+		t.Errorf("expected User struct for 'USERS' table, got %v", res3)
+	}
+}
+
+func TestGlobals(t *testing.T) {
+	g := buildRichGraph()
+	res := search.Globals(g, "config")
+	// Expect the variable and its mutator
+	if len(res) != 2 {
+		t.Errorf("expected 2 global results, got %d: %v", len(res), res)
+	}
+	
+	hasVar := false
+	hasMut := false
+	for _, r := range res {
+		if r.Kind == "var" && r.Name == "globalConfig" {
+			hasVar = true
+		}
+		if r.Kind == "mutator" && r.Name == "Load" {
+			hasMut = true
+		}
+	}
+	if !hasVar {
+		t.Error("expected globalConfig variable in results")
+	}
+	if !hasMut {
+		t.Error("expected Load mutator in results")
+	}
+}
+
+func TestMocks(t *testing.T) {
+	g := buildRichGraph()
+	res := search.Mocks(g, "Stringer")
+	if len(res) != 1 || res[0].Name != "MockStringer" {
+		t.Errorf("expected MockStringer for 'Stringer' mock, got %v", res)
+	}
+	if res[0].Kind != "mock" {
+		t.Errorf("expected Kind 'mock', got %s", res[0].Kind)
 	}
 }

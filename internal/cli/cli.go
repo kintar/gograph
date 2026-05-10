@@ -126,6 +126,14 @@ func Run(args []string) int {
 		return runCapabilities()
 	case "mcp":
 		return runMCP(args[1:])
+	case "constructors":
+		return runConstructors(args[1:])
+	case "schema":
+		return runSchema(args[1:])
+	case "globals":
+		return runGlobals(args[1:])
+	case "mocks":
+		return runMocks(args[1:])
 	case "help", "--help", "-h":
 		printHelp()
 		return 0
@@ -189,7 +197,11 @@ context <sym>        : bundle node+source+callers+callees+tests (saves 4-5 tool 
 hotspot [--top N]    : rank functions by incoming calls (study these first)
 deps <pkg> [--transitive] : import dependency tree of a package
 changes              : symbols modified/new/deleted since last build
-imports <pkg>        : trace external/internal usage`)
+imports <pkg>        : trace external/internal usage
+constructors <struct>: factory functions returning struct
+schema <table>       : structs mapped to DB table via tags
+globals <pkg>        : pkg-level vars and mutators
+mocks <iface>        : structs implementing iface in test files`)
 	return 0
 }
 
@@ -724,6 +736,10 @@ CALL GRAPH
 INTERFACES & TYPES
   implementers <interface>   Structs that implement the named interface (duck-typing).
   interfaces <struct>        Interfaces satisfied by the named struct (duck-typing).
+  constructors <struct>      Find factory functions returning the named struct.
+  schema <table>             Find structs mapped to a database table/schema via tags.
+  globals <pkg>              Find package-level variables and functions mutating them.
+  mocks <interface>          Find structs implementing an interface in test/mock files.
 
 CODE QUALITY
   complexity [symbol]        Cyclomatic complexity per function, highest first.
@@ -1453,4 +1469,63 @@ func runTrace(args []string) int {
 		fmt.Println()
 	}
 	return 0
+}
+
+func runConstructors(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: gograph constructors <struct>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading graph: %v\n", err)
+		return 1
+	}
+	results := search.Constructors(g, args[0])
+	return printResults("constructors", args[0], results, fmt.Sprintf("No constructors found for struct '%s'.", args[0]))
+}
+
+func runSchema(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: gograph schema <table>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading graph: %v\n", err)
+		return 1
+	}
+	results := search.Schema(g, args[0])
+	return printResults("schema", args[0], results, fmt.Sprintf("No struct found mapped to table '%s'.", args[0]))
+}
+
+func runGlobals(args []string) int {
+	term := ""
+	if len(args) > 0 {
+		term = args[0]
+	} else {
+		fmt.Fprintln(os.Stderr, "Usage: gograph globals <package>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading graph: %v\n", err)
+		return 1
+	}
+	results := search.Globals(g, term)
+	return printResults("globals", term, results, "No globals or mutators found.")
+}
+
+func runMocks(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: gograph mocks <interface>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading graph: %v\n", err)
+		return 1
+	}
+	results := search.Mocks(g, args[0])
+	return printResults("mocks", args[0], results, fmt.Sprintf("No mocks found for interface '%s'.", args[0]))
 }

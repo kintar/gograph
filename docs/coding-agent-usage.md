@@ -66,6 +66,10 @@ gograph changes                  # new/modified/deleted symbols since last build
 gograph trace "parse failed"     # trace an error string backwards to entry points
 gograph mutate "User.Status"     # find functions that mutate a specific struct field
 gograph skeleton                 # output the whole repository's API signatures (bodies stripped)
+gograph constructors <struct>    # find factory functions returning a named struct
+gograph schema <table>           # find structs mapped to a database table or schema via tags
+gograph globals <pkg>            # find package-level variables and functions mutating them
+gograph mocks <interface>        # find structs implementing an interface in test or mock files
 gograph capabilities            # print token-optimized AI agent cheat sheet
 gograph mcp <path>              # runs an MCP server over stdio
 ```

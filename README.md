@@ -100,6 +100,10 @@ gograph changes                   # New/modified/deleted symbols since last buil
 gograph trace "parse failed"      # Trace an error string backwards to entry points
 gograph mutate "User.Status"      # Find functions that mutate a specific struct field
 gograph skeleton                  # Output the whole repository's API signatures (bodies stripped)
+gograph constructors "User"       # Find factory functions returning the named struct
+gograph schema "users"            # Find structs mapped to a database table/schema via tags
+gograph globals "internal/auth"   # Find package-level variables and functions mutating them
+gograph mocks "AuthService"       # Find structs implementing an interface in test/mock files
 ```
 
 **3. Agent JSON Integration:**

@@ -315,6 +315,8 @@ func Serve(g *graph.Graph, rebuild func() (*graph.Graph, error)) error {
 		return formatResults(results), nil
 	})
 
+	initNewTools(s, g, rebuild)
+
 	// Start stdio server
 	return server.ServeStdio(s)
 }
@@ -330,4 +332,90 @@ func formatResults(results []search.Result) *mcp.CallToolResult {
 	}
 
 	return mcp.NewToolResultText(sb.String())
+}
+
+func initNewTools(s *server.MCPServer, g *graph.Graph, rebuild func() (*graph.Graph, error)) {
+	// Tool: gograph_constructors
+	constructorsTool := mcp.NewTool("gograph_constructors",
+		mcp.WithDescription("Find factory functions returning the named struct."),
+		mcp.WithString("struct", mcp.Required(), mcp.Description("The name of the struct (e.g., 'User')")),
+	)
+	s.AddTool(constructorsTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
+		args, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			return mcp.NewToolResultError("invalid arguments"), nil
+		}
+		str, ok := args["struct"].(string)
+		if !ok || str == "" {
+			return mcp.NewToolResultError("missing 'struct' argument"), nil
+		}
+		results := search.Constructors(g, str)
+		return formatResults(results), nil
+	})
+
+	// Tool: gograph_schema
+	schemaTool := mcp.NewTool("gograph_schema",
+		mcp.WithDescription("Find structs mapped to a database table or schema via struct tags."),
+		mcp.WithString("table", mcp.Required(), mcp.Description("The table or schema name (e.g., 'users')")),
+	)
+	s.AddTool(schemaTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
+		args, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			return mcp.NewToolResultError("invalid arguments"), nil
+		}
+		tbl, ok := args["table"].(string)
+		if !ok || tbl == "" {
+			return mcp.NewToolResultError("missing 'table' argument"), nil
+		}
+		results := search.Schema(g, tbl)
+		return formatResults(results), nil
+	})
+
+	// Tool: gograph_globals
+	globalsTool := mcp.NewTool("gograph_globals",
+		mcp.WithDescription("Find package-level variables and functions mutating them."),
+		mcp.WithString("package", mcp.Required(), mcp.Description("The package name (e.g., 'internal/config')")),
+	)
+	s.AddTool(globalsTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
+		args, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			return mcp.NewToolResultError("invalid arguments"), nil
+		}
+		pkg, ok := args["package"].(string)
+		if !ok || pkg == "" {
+			return mcp.NewToolResultError("missing 'package' argument"), nil
+		}
+		results := search.Globals(g, pkg)
+		return formatResults(results), nil
+	})
+
+	// Tool: gograph_mocks
+	mocksTool := mcp.NewTool("gograph_mocks",
+		mcp.WithDescription("Find structs implementing an interface, filtered to test or mock files."),
+		mcp.WithString("interface", mcp.Required(), mcp.Description("The name of the interface (e.g., 'AuthService')")),
+	)
+	s.AddTool(mocksTool, func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if newG, err := rebuild(); err == nil {
+			g = newG
+		}
+		args, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			return mcp.NewToolResultError("invalid arguments"), nil
+		}
+		iface, ok := args["interface"].(string)
+		if !ok || iface == "" {
+			return mcp.NewToolResultError("missing 'interface' argument"), nil
+		}
+		results := search.Mocks(g, iface)
+		return formatResults(results), nil
+	})
 }

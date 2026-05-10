@@ -44,7 +44,7 @@ func buildGraphWithRealFiles(t *testing.T) *graph.Graph {
 				Name: "Query",
 				Kind: graph.KindFunction,
 				File: searchFile,
-				Line: 47, // line where func Query starts in search.go
+				Line: 48, // line where func Query starts in search.go
 			},
 		},
 	}
@@ -95,8 +95,8 @@ func TestComplexity_SortedDescending(t *testing.T) {
 	g := &graph.Graph{
 		Symbols: []graph.SymbolNode{
 			// Query has many branches; Node has fewer.
-			{ID: "search.Query", Name: "Query", Kind: graph.KindFunction, File: searchFile, Line: 47},
-			{ID: "search.Node", Name: "Node", Kind: graph.KindFunction, File: searchFile, Line: 108},
+			{ID: "search.Query", Name: "Query", Kind: graph.KindFunction, File: searchFile, Line: 48},
+			{ID: "search.Node", Name: "Node", Kind: graph.KindFunction, File: searchFile, Line: 109},
 		},
 	}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/ozgurcd/gograph/internal/graph"
@@ -155,7 +156,10 @@ func Callers(g *graph.Graph, name string) []Result {
 	}
 
 	// Collect all matching call edges (one per unique call site).
-	type siteKey struct{ id, callFile string; callLine int }
+	type siteKey struct {
+		id, callFile string
+		callLine     int
+	}
 	seen := make(map[siteKey]bool)
 	var results []Result
 	for _, c := range g.Calls {
@@ -390,7 +394,7 @@ func Implementers(g *graph.Graph, interfaceName string) []Result {
 func Source(g *graph.Graph, rootDir, symbolName string) (string, error) {
 	var target *graph.SymbolNode
 	nl := strings.ToLower(symbolName)
-	
+
 	// Exact match preferred
 	for i, s := range g.Symbols {
 		if strings.ToLower(s.Name) == nl || strings.ToLower(s.ID) == nl {
@@ -398,7 +402,7 @@ func Source(g *graph.Graph, rootDir, symbolName string) (string, error) {
 			break
 		}
 	}
-	
+
 	if target == nil {
 		return "", fmt.Errorf("symbol '%s' not found", symbolName)
 	}
@@ -412,7 +416,7 @@ func Source(g *graph.Graph, rootDir, symbolName string) (string, error) {
 	lines := strings.Split(string(data), "\n")
 	start := target.Line - 1
 	end := target.EndLine
-	
+
 	if start < 0 {
 		start = 0
 	}
@@ -510,7 +514,7 @@ func ImpactMultiple(g *graph.Graph, names []string, reason string) []Result {
 		queue = append(queue, nl)
 		visitedTerms[nl] = true
 	}
-	
+
 	var results []Result
 	seenIDs := make(map[string]bool)
 
@@ -523,7 +527,7 @@ func ImpactMultiple(g *graph.Graph, names []string, reason string) []Result {
 				callerID := c.CallerSymbolID
 				if !seenIDs[callerID] {
 					seenIDs[callerID] = true
-					
+
 					sym, ok := callerSymbols[callerID]
 					if ok {
 						results = append(results, Result{
@@ -534,7 +538,7 @@ func ImpactMultiple(g *graph.Graph, names []string, reason string) []Result {
 							Detail: reason,
 							Score:  8,
 						})
-						
+
 						nextTerm := strings.ToLower(sym.Name)
 						if !visitedTerms[nextTerm] {
 							visitedTerms[nextTerm] = true
@@ -545,7 +549,7 @@ func ImpactMultiple(g *graph.Graph, names []string, reason string) []Result {
 			}
 		}
 	}
-	
+
 	sortResults(results)
 	return results
 }
@@ -811,5 +815,146 @@ func Tests(g *graph.Graph, term string) []Result {
 		}
 	}
 	sortResults(results)
+	return results
+}
+
+// Constructors finds functions whose return signature includes the target struct type,
+// indicating they are constructors or factory functions. Matches both pointer and value returns.
+func Constructors(g *graph.Graph, structName string) []Result {
+	var results []Result
+	// Match structName preceded by *, space, or dot, and followed by comma, space, paren, or end of string.
+	pattern := `(?:[* \.])` + regexp.QuoteMeta(structName) + `(?:[,) ]|$)`
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return results
+	}
+
+	for _, s := range g.Symbols {
+		if s.Kind != graph.KindFunction && s.Kind != graph.KindMethod {
+			continue
+		}
+		sig := s.Signature
+		// Find where parameters end: the last ") " separates params from return type.
+		// A void function like "func Foo(g *Graph)" has no ") " (ends with ")").
+		idx := strings.LastIndex(sig, ") ")
+		if idx == -1 {
+			// No return type — skip entirely to avoid false positives on params.
+			continue
+		}
+		returnSig := sig[idx:]
+		if re.MatchString(returnSig) {
+			results = append(results, Result{
+				Kind:   "constructor",
+				Name:   s.Name,
+				File:   s.File,
+				Line:   s.Line,
+				Detail: "returns " + structName,
+				Score:  10,
+			})
+		}
+	}
+	sortResults(results)
+	return results
+}
+
+// Schema finds the Go struct that maps to a specific database table or schema name via struct tags.
+func Schema(g *graph.Graph, tableName string) []Result {
+	var results []Result
+	nl := strings.ToLower(tableName)
+	
+	// Pre-compute the search targets to avoid string concatenation inside the loop
+	targets := []string{
+		`"` + nl + `"`,
+		`'` + nl + `'`,
+		`:` + nl + `"`,
+		`:` + nl + `'`,
+		`"` + nl + `,`,
+		`'` + nl + `,`,
+	}
+
+	for _, s := range g.Symbols {
+		if s.Kind == graph.KindStruct {
+			for _, f := range s.StructFields {
+				t := strings.ToLower(f.Tag)
+				matched := false
+				for _, target := range targets {
+					if strings.Contains(t, target) {
+						matched = true
+						break
+					}
+				}
+				if matched {
+					results = append(results, Result{
+						Kind:   "schema",
+						Name:   s.Name,
+						File:   s.File,
+						Line:   s.Line,
+						Detail: fmt.Sprintf("field %s mapped to %s", f.Name, f.Tag),
+						Score:  10,
+					})
+					break // only report the struct once
+				}
+			}
+		}
+	}
+	sortResults(results)
+	return results
+}
+
+// Globals finds package-level variables and functions mutating them.
+func Globals(g *graph.Graph, pkgName string) []Result {
+	var results []Result
+	nl := strings.ToLower(pkgName)
+	var globalVars []graph.SymbolNode
+
+	// Find global variables in the given package
+	for _, s := range g.Symbols {
+		if s.Kind == graph.KindVar && strings.Contains(strings.ToLower(s.PackageName), nl) {
+			globalVars = append(globalVars, s)
+			results = append(results, Result{
+				Kind:   "var",
+				Name:   s.Name,
+				File:   s.File,
+				Line:   s.Line,
+				Detail: "package-level variable in " + s.PackageName,
+				Score:  10,
+			})
+		}
+	}
+
+	// Find mutators for those variables
+	for _, v := range globalVars {
+		for _, m := range g.Mutations {
+			// This is a heuristic: if an Ident was mutated with the same name, we list it.
+			// It might have false positives with local variables shadowing the global.
+			if m.Field == v.Name {
+				results = append(results, Result{
+					Kind:   "mutator",
+					Name:   m.Function,
+					File:   m.File,
+					Line:   m.Line,
+					Detail: "assigns to global var " + v.Name,
+					Score:  8,
+				})
+			}
+		}
+	}
+
+	sortResults(results)
+	return results
+}
+
+// Mocks finds structs that implement the given interface, filtered to test or mock files.
+func Mocks(g *graph.Graph, interfaceName string) []Result {
+	implementers := Implementers(g, interfaceName)
+	var results []Result
+	for _, res := range implementers {
+		fl := strings.ToLower(res.File)
+		if strings.HasSuffix(fl, "_test.go") || strings.Contains(fl, "mock") || strings.Contains(fl, "fake") {
+			res.Kind = "mock"
+			res.Detail = "mock " + res.Detail
+			results = append(results, res)
+		}
+	}
 	return results
 }

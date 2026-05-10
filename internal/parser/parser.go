@@ -119,6 +119,33 @@ func ParseFile(fset *token.FileSet, path, relPath string) (*FileResult, error) {
 // extractGenDecl handles type declarations (structs, interfaces).
 func extractGenDecl(fset *token.FileSet, d *ast.GenDecl, relPath, pkgName string, result *FileResult) {
 	for _, spec := range d.Specs {
+		if vs, ok := spec.(*ast.ValueSpec); ok {
+			if d.Tok == token.VAR {
+				for _, name := range vs.Names {
+					pos := fset.Position(name.Pos())
+					endPos := fset.Position(name.End())
+					doc := ""
+					if d.Doc != nil {
+						doc = d.Doc.Text()
+					} else if vs.Comment != nil {
+						doc = vs.Comment.Text()
+					}
+					sym := graph.SymbolNode{
+						ID:          fmt.Sprintf("%s::%s", relPath, name.Name),
+						Kind:        graph.KindVar,
+						Name:        name.Name,
+						PackageName: pkgName,
+						File:        relPath,
+						Line:        pos.Line,
+						EndLine:     endPos.Line,
+						Doc:         strings.TrimSpace(doc),
+					}
+					result.Symbols = append(result.Symbols, sym)
+				}
+			}
+			continue
+		}
+
 		ts, ok := spec.(*ast.TypeSpec)
 		if !ok {
 			continue
@@ -396,10 +423,20 @@ func extractFuncDecl(fset *token.FileSet, d *ast.FuncDecl, relPath, pkgName stri
 			if !ok {
 				return true
 			}
+			// Only track actual assignments, not declarations (:=) for global mutations
+			isDecl := assign.Tok == token.DEFINE
+
 			for _, lhs := range assign.Lhs {
 				if sel, ok := lhs.(*ast.SelectorExpr); ok {
 					result.Mutations = append(result.Mutations, graph.MutationEdge{
 						Field:    sel.Sel.Name,
+						Function: callerName,
+						File:     relPath,
+						Line:     fset.Position(assign.Pos()).Line,
+					})
+				} else if id, ok := lhs.(*ast.Ident); ok && !isDecl {
+					result.Mutations = append(result.Mutations, graph.MutationEdge{
+						Field:    id.Name,
 						Function: callerName,
 						File:     relPath,
 						Line:     fset.Position(assign.Pos()).Line,

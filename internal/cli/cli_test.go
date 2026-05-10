@@ -99,6 +99,13 @@ func TestAllCommandsRegistered(t *testing.T) {
 		"envs",
 		"concurrency",
 		"tests",
+		"constructors",
+		"schema",
+		"globals",
+		"mocks",
+		"trace",
+		"mutate",
+		"skeleton",
 		// aliases
 		"help",
 		"--help",
