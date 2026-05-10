@@ -143,7 +143,10 @@ Read .gograph/GRAPH_REPORT.md first.
 COMMANDS (token-optimized):
 (Note: All search/navigation commands support --json for stable machine parsing)
 build . [--precise]  : parse AST, gen GRAPH_REPORT.md & .gograph/*
-                       (use --precise for exact type-checked call edges)
+
+RULES FOR --precise:
+- Default (build .): Use during active, messy development. It's lightning-fast, tolerates syntax/build errors, and uses AST heuristics (duck-typing) for interfaces.
+- Precise (build . --precise): Use before a major refactor or when measuring blast radius (impact). Slower, but compiles full SSA for absolute cryptographic proof of interface satisfaction and exact dynamic method dispatches. Code MUST be compilable.
 query <str>          : search symbols/files/pkgs
 focus <pkg>          : isolate context for a package
 callers <fn>         : who calls fn
