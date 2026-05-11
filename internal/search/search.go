@@ -429,43 +429,57 @@ func Implementers(g *graph.Graph, interfaceName string) []Result {
 
 // Source extracts the exact source code lines for a given symbol.
 func Source(g *graph.Graph, rootDir, symbolName string) (string, error) {
-	var target *graph.SymbolNode
+	var targets []graph.SymbolNode
 	nl := strings.ToLower(symbolName)
 
-	// Exact match preferred
-	for i, s := range g.Symbols {
-		if strings.ToLower(s.Name) == nl || strings.ToLower(s.ID) == nl {
-			target = &g.Symbols[i]
-			break
+	for _, s := range g.Symbols {
+		recName := strings.ToLower(fmt.Sprintf("%s.%s", strings.TrimPrefix(strings.TrimPrefix(s.Receiver, "*"), "("), s.Name))
+		fullRecName := strings.ToLower(fmt.Sprintf("(%s).%s", s.Receiver, s.Name))
+
+		if strings.ToLower(s.Name) == nl || strings.ToLower(s.ID) == nl || recName == nl || fullRecName == nl {
+			targets = append(targets, s)
 		}
 	}
 
-	if target == nil {
+	if len(targets) == 0 {
 		return "", fmt.Errorf("symbol '%s' not found", symbolName)
 	}
 
-	absPath := filepath.Join(rootDir, target.File)
-	data, err := os.ReadFile(absPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read file %s: %w", target.File, err)
+	var results []string
+	limit := 5
+	for i, target := range targets {
+		if i >= limit {
+			results = append(results, fmt.Sprintf("// WARNING: %d other implementations of '%s' were found but omitted to save tokens. Please be more specific (e.g., Receiver.Method).", len(targets)-limit, symbolName))
+			break
+		}
+
+		absPath := filepath.Join(rootDir, target.File)
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			results = append(results, fmt.Sprintf("// Error reading file %s: %v", target.File, err))
+			continue
+		}
+
+		lines := strings.Split(string(data), "\n")
+		start := target.Line - 1
+		end := target.EndLine
+
+		if start < 0 {
+			start = 0
+		}
+		if end > len(lines) {
+			end = len(lines)
+		}
+		if start >= end {
+			results = append(results, fmt.Sprintf("// Error: invalid line range %d to %d for %s", target.Line, target.EndLine, target.ID))
+			continue
+		}
+
+		extracted := strings.Join(lines[start:end], "\n")
+		results = append(results, fmt.Sprintf("// %s (%s:%d-%d)\n%s", target.ID, target.File, target.Line, target.EndLine, extracted))
 	}
 
-	lines := strings.Split(string(data), "\n")
-	start := target.Line - 1
-	end := target.EndLine
-
-	if start < 0 {
-		start = 0
-	}
-	if end > len(lines) {
-		end = len(lines)
-	}
-	if start >= end {
-		return "", fmt.Errorf("invalid line range: %d to %d", target.Line, target.EndLine)
-	}
-
-	extracted := strings.Join(lines[start:end], "\n")
-	return fmt.Sprintf("// %s (%s:%d-%d)\n%s", target.ID, target.File, target.Line, target.EndLine, extracted), nil
+	return strings.Join(results, "\n\n---\n\n"), nil
 }
 
 // Orphans finds functions and methods that are never explicitly called in the codebase.
