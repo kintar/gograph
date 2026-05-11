@@ -119,6 +119,7 @@ const (
 	KindStruct    SymbolKind = "struct"
 	KindInterface SymbolKind = "interface"
 	KindVar       SymbolKind = "var"
+	KindConst     SymbolKind = "const"
 )
 
 // SymbolNode represents a named symbol (function, method, struct, interface).

@@ -120,19 +120,25 @@ func ParseFile(fset *token.FileSet, path, relPath string) (*FileResult, error) {
 func extractGenDecl(fset *token.FileSet, d *ast.GenDecl, relPath, pkgName string, result *FileResult) {
 	for _, spec := range d.Specs {
 		if vs, ok := spec.(*ast.ValueSpec); ok {
-			if d.Tok == token.VAR {
+			if d.Tok == token.VAR || d.Tok == token.CONST {
 				for _, name := range vs.Names {
 					pos := fset.Position(name.Pos())
-					endPos := fset.Position(name.End())
+					endPos := fset.Position(vs.End()) // use vs.End() to capture the entire expression block
 					doc := ""
 					if d.Doc != nil {
 						doc = d.Doc.Text()
 					} else if vs.Comment != nil {
 						doc = vs.Comment.Text()
 					}
+					
+					symKind := graph.KindVar
+					if d.Tok == token.CONST {
+						symKind = graph.KindConst
+					}
+
 					sym := graph.SymbolNode{
 						ID:          fmt.Sprintf("%s::%s", relPath, name.Name),
-						Kind:        graph.KindVar,
+						Kind:        symKind,
 						Name:        name.Name,
 						PackageName: pkgName,
 						File:        relPath,
