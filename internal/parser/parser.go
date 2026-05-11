@@ -559,20 +559,36 @@ func funcSignature(d *ast.FuncDecl) string {
 	return sb.String()
 }
 
-// funcTypeSignature builds just the parameter and return type signature
+// funcTypeSignature builds just the parameter and return type signature (names omitted for duck-typing)
 func funcTypeSignature(ft *ast.FuncType) string {
 	var sb strings.Builder
 	sb.WriteString("func(")
 	if ft.Params != nil {
-		sb.WriteString(fieldListString(ft.Params))
+		sb.WriteString(typeOnlyFieldListString(ft.Params))
 	}
 	sb.WriteString(")")
 	if ft.Results != nil && len(ft.Results.List) > 0 {
 		sb.WriteString(" (")
-		sb.WriteString(fieldListString(ft.Results))
+		sb.WriteString(typeOnlyFieldListString(ft.Results))
 		sb.WriteString(")")
 	}
 	return sb.String()
+}
+
+// typeOnlyFieldListString converts an ast.FieldList to a string of types only, ignoring parameter names.
+func typeOnlyFieldListString(fl *ast.FieldList) string {
+	parts := make([]string, 0, len(fl.List))
+	for _, f := range fl.List {
+		typStr := typeString(f.Type)
+		if len(f.Names) == 0 {
+			parts = append(parts, typStr)
+		} else {
+			for range f.Names {
+				parts = append(parts, typStr)
+			}
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 // fieldListString converts an ast.FieldList to a compact string.
