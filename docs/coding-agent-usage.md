@@ -69,9 +69,10 @@ gograph arity --min 5            # find functions with many arguments (long para
 gograph skeleton                 # output the whole repository's API signatures (bodies stripped)
 gograph constructors <struct>    # find factory functions returning a named struct
 gograph schema <table>           # find structs mapped to a database table or schema via tags
-gograph globals <pkg>            # find package-level variables and functions mutating them
+gograph globals <pkg>            # find pkg-level vars, consts, and functions mutating them
 gograph mocks <interface>        # find structs implementing an interface in test or mock files
-gograph capabilities            # print token-optimized AI agent cheat sheet
+gograph fixtures <pkg>           # find test helper structs and functions in test files
+gograph capabilities             # print token-optimized AI agent cheat sheet
 gograph mcp <path>              # runs an MCP server over stdio
 ```
 

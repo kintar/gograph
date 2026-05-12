@@ -147,6 +147,8 @@ func Run(args []string) int {
 		return runGlobals(args[1:])
 	case "mocks":
 		return runMocks(args[1:])
+	case "fixtures":
+		return runFixtures(args[1:])
 	case "help", "--help", "-h":
 		printHelp()
 		return 0
@@ -206,8 +208,9 @@ changes              : symbols modified/new/deleted since last build
 imports <pkg>        : trace external/internal usage
 constructors <struct>: factory functions returning struct
 schema <table>       : structs mapped to DB table via tags
-globals <pkg>        : pkg-level vars and mutators
-mocks <iface>        : structs implementing iface in test files`)
+globals <pkg>        : pkg-level vars, consts, and mutators
+mocks <iface>        : structs implementing iface in test files
+fixtures <pkg>       : test helper structs and functions in test files`)
 	return 0
 }
 
@@ -731,6 +734,8 @@ USAGE
 GLOBAL FLAGS
   --json                     Output strictly in a machine-parseable JSON envelope.
                              Recommended for all automated agent usage.
+  --files-only               Output only a flat, deduplicated list of file paths.
+                             Great for extracting checklists without blowing up tokens.
 
 INDEXING
   build [path]               Walk and parse a Go repository. Generates graph.json
@@ -747,7 +752,7 @@ SEARCH & NAVIGATION
   focus <package>            Show all symbols, imports, and call edges for one
                              package. Token-efficient alternative to reading files.
   node <name>                Show full AST details for a symbol, package, or file.
-  source <name>              Extract the raw source code of a named symbol.
+  source <name>              Extract raw source code (functions, interfaces, consts).
   public <package>           List only the exported (public) API of a package.
   fields <struct>            List all fields and types of a struct.
   embeds <struct>            Find which structs embed the given struct.
@@ -772,8 +777,9 @@ INTERFACES & TYPES
   interfaces <struct>        Interfaces satisfied by the named struct (duck-typing).
   constructors <struct>      Find factory functions returning the named struct.
   schema <table>             Find structs mapped to a database table/schema via tags.
-  globals <pkg>              Find package-level variables and functions mutating them.
+  globals <pkg>              Find pkg-level vars, consts, and mutators.
   mocks <interface>          Find structs implementing an interface in test/mock files.
+  fixtures <pkg>             Find test helper structs and functions in test files.
 
 CODE QUALITY
   complexity [symbol]        Cyclomatic complexity per function, highest first.
@@ -1677,4 +1683,18 @@ func runMocks(args []string) int {
 	}
 	results := search.Mocks(g, args[0])
 	return printResults("mocks", args[0], results, fmt.Sprintf("No mocks found for interface '%s'.", args[0]))
+}
+
+func runFixtures(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: gograph fixtures <package>")
+		return 1
+	}
+	g, err := loadGraph(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading graph: %v\n", err)
+		return 1
+	}
+	results := search.Fixtures(g, args[0])
+	return printResults("fixtures", args[0], results, fmt.Sprintf("No fixtures found for package '%s'.", args[0]))
 }

@@ -976,22 +976,24 @@ func Schema(g *graph.Graph, tableName string) []Result {
 	return results
 }
 
-// Globals finds package-level variables and functions mutating them.
+// Globals finds package-level variables, constants, and functions mutating variables.
 func Globals(g *graph.Graph, pkgName string) []Result {
 	var results []Result
 	nl := strings.ToLower(pkgName)
 	var globalVars []graph.SymbolNode
 
-	// Find global variables in the given package
+	// Find global variables and constants in the given package
 	for _, s := range g.Symbols {
-		if s.Kind == graph.KindVar && strings.Contains(strings.ToLower(s.PackageName), nl) {
-			globalVars = append(globalVars, s)
+		if (s.Kind == graph.KindVar || s.Kind == graph.KindConst) && strings.Contains(strings.ToLower(s.PackageName), nl) {
+			if s.Kind == graph.KindVar {
+				globalVars = append(globalVars, s)
+			}
 			results = append(results, Result{
-				Kind:   "var",
+				Kind:   string(s.Kind),
 				Name:   s.Name,
 				File:   s.File,
 				Line:   s.Line,
-				Detail: "package-level variable in " + s.PackageName,
+				Detail: "package-level " + string(s.Kind) + " in " + s.PackageName,
 				Score:  10,
 			})
 		}
@@ -1030,5 +1032,35 @@ func Mocks(g *graph.Graph, interfaceName string) []Result {
 			results = append(results, res)
 		}
 	}
+	return results
+}
+
+// Fixtures finds test helper types and factory functions in test files for a package.
+func Fixtures(g *graph.Graph, pkgName string) []Result {
+	var results []Result
+	nl := strings.ToLower(pkgName)
+	
+	for _, s := range g.Symbols {
+		if !isTestFile(s.File) {
+			continue
+		}
+		if !strings.Contains(strings.ToLower(s.PackageName), nl) {
+			continue
+		}
+		if strings.HasPrefix(s.Name, "Test") || strings.HasPrefix(s.Name, "Benchmark") || strings.HasPrefix(s.Name, "Example") {
+			continue
+		}
+		
+		results = append(results, Result{
+			Kind:   "fixture",
+			Name:   s.Name,
+			File:   s.File,
+			Line:   s.Line,
+			Detail: string(s.Kind) + " in test file",
+			Score:  10,
+		})
+	}
+	
+	sortResults(results)
 	return results
 }

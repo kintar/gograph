@@ -5,6 +5,8 @@
 
 `gograph` is a local AST/type-aware Go repository context indexer for AI coding agents.
 
+![Gograph Demo](gograph-demo.gif)
+
 It builds a compact graph of packages, symbols, calls, routes, config reads, tests, and code-quality signals so agents can navigate Go repositories with fewer raw file reads.
 
 > **Note on Language Support:** I originally built `gograph` specifically for **Golang** because that is what I needed for my own workflows. It currently only parses and maps Go codebases. However, the architecture is extensible! If you want to add support for other languages (Python, TypeScript, Rust, etc.), **contributions are more than welcome.** Please see the [Contributing Guide](CONTRIBUTING.md) to get started.
@@ -71,7 +73,7 @@ gograph callees "InitServer" [--no-tests]    # See what InitServer calls (with e
 gograph implementers "AuthService" # See which structs implement an interface
 gograph interfaces "UserService"  # See which interfaces a struct satisfies (type-checked if --precise was used)
 gograph fields "User"             # Extract all fields and types of a struct
-gograph source "ValidateToken"    # Extract the source code for a specific symbol
+gograph source "ValidateToken"    # Extract the source code for a specific symbol (function, interface, const)
 gograph impact "ValidateToken"    # View the full blast radius (all downstream callers)
 gograph impact --uncommitted      # Calculate the blast radius of all your uncommitted code changes
 gograph orphans                   # List functions and methods with 0 explicit incoming calls
@@ -107,12 +109,16 @@ gograph arity --min 5             # Find functions with many arguments (long par
 gograph skeleton                  # Output the whole repository's API signatures (bodies stripped)
 gograph constructors "User"       # Find factory functions returning the named struct
 gograph schema "users"            # Find structs mapped to a database table/schema via tags
-gograph globals "internal/auth"   # Find package-level variables and functions mutating them
+gograph globals "internal/auth"   # Find pkg-level vars, consts, and functions mutating them
 gograph mocks "AuthService"       # Find structs implementing an interface in test/mock files
+gograph fixtures "internal/auth"  # Find test helper structs and functions in test files
 ```
 
 **3. Agent JSON Integration:**
-All query commands support the `--json` flag to return a stable, machine-parseable envelope:
+All search and query commands support the `--json` flag to emit strictly formatted, machine-parseable JSON envelopes.
+
+For specific instructions on how to configure agents to use `gograph`, read the [Claude Code Integration Guide](docs/claude-code-integration.md).
+
 ```bash
 gograph callers "ValidateToken" --json
 ```

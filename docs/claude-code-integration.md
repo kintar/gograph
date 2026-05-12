@@ -1,0 +1,75 @@
+# Gograph + Claude Code Integration
+
+[Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code) is Anthropic's official CLI-based agent. By default, Claude Code uses basic text tools (`grep`, `ls`, `cat`) to explore repositories. In large Go codebases, this often leads to:
+1. **Context Window Exhaustion:** Reading full files (e.g., `cat handler.go`) consumes tens of thousands of tokens.
+2. **Hallucinations:** `grep` fails to resolve interfaces, duck-typing, or call chains reliably.
+
+By providing Claude Code with `gograph`, you give it a **semantic, AST-aware understanding** of your Go repository, drastically reducing token usage and improving coding accuracy.
+
+## 1. Installation
+
+Ensure `gograph` is built and accessible in your system `$PATH` so Claude Code can invoke it directly from the terminal.
+
+```bash
+# Using Homebrew
+brew tap ozgurcd/tap
+brew install gograph
+
+# Or manually from source
+cd /path/to/gograph
+make build
+# symlink bin/gograph to /usr/local/bin/gograph
+```
+
+## 2. Project Instructions Setup
+
+Claude Code looks for a `CLAUDE.md` file in the root of your repository to understand project-specific rules and tool preferences. 
+
+Add the following block to your repository's `CLAUDE.md`:
+
+```markdown
+## Repository Navigation (CRITICAL)
+This project is indexed using `gograph`. **DO NOT use `grep` or `cat` for structural Go code analysis.**
+
+1. Always run `gograph build .` at the start of your session to ensure the index is fresh. If the codebase is in a compilable state, use `gograph build . --precise` instead to enable strict type-checked interface analysis and highly precise call edges.
+2. To find interface implementers, run: `gograph implementers <InterfaceName>`
+3. To extract a function body or mock stub without reading the whole file, run: `gograph source <SymbolName>`
+4. To see where a function is called, run: `gograph callers <FunctionName>`
+5. Use `grep` ONLY for string literals, configuration files (.env), or markdown documentation.
+```
+
+## 3. Example Workflows
+
+Here is how Claude Code behaves before and after `gograph`:
+
+### Scenario: Finding how an interface is implemented
+
+**❌ Without Gograph (The `grep` loop)**
+1. Claude: `grep -rn "AuthService" .`
+2. Claude: *Gets 400 lines of noise from tests, mocks, and dependency injection.*
+3. Claude: `cat internal/auth/service.go` *(burns 5,000 tokens reading the file)*
+4. Claude: *Guesses which struct actually implements it.*
+
+**✅ With Gograph (The Precision loop)**
+1. Claude: `gograph implementers "AuthService" --json`
+2. Claude: *Instantly receives the exact struct name `authServiceImpl` and file path.*
+3. Claude: `gograph source "authServiceImpl" --json`
+4. Claude: *Extracts exactly the 20 lines of the struct definition and nothing else. Total cost: ~100 tokens.*
+
+### Scenario: Modifying a function safely
+
+**✅ With Gograph (Blast Radius check)**
+1. Claude: `gograph impact "ValidateToken"`
+2. Claude: *Sees exactly the 3 downstream HTTP handlers that will be affected by changing the token validation signature.*
+3. Claude: `gograph source "ValidateToken"`
+4. Claude: *Reads the function, plans the edit, and safely applies it.*
+
+## 4. MCP Integration (Optional)
+
+If you are using Claude Code in an environment that supports the Model Context Protocol (MCP), you can run Gograph directly as an MCP server over `stdio`:
+
+```bash
+gograph mcp .
+```
+
+This exposes all of `gograph`'s capabilities as native LLM tools (e.g., `mcp_gograph_query`, `mcp_gograph_source`), allowing the agent to invoke them automatically without needing CLI prompt instructions.
